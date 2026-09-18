@@ -41,6 +41,31 @@ NO_FINDING = "No finding"
 
 ALL_LABELS = [NO_FINDING] + FINDINGS
 
+# Lung-focused subset: parenchyma / pleura / airway pathologies.
+# Excludes bones, vasculature, aorta & cardiac labels to keep the
+# first release strictly "lung radiology" (легкие).
+LUNG_FINDINGS = [
+    "Atelectasis",
+    "Consolidation",
+    "Emphysema",
+    "Infiltration",
+    "Lung Opacity",
+    "Nodule/Mass",
+    "Other lesion",
+    "Pleural effusion",
+    "Pleural thickening",
+    "Pneumothorax",
+    "Pulmonary fibrosis",
+    "Ill-defined opacity",
+    "Parenchymal bands",
+    "Pulmonary cyst",
+    "Scarring",
+    "Subcutaneous emphysema",
+    "Lung cavity",
+]
+
+LUNG_LABELS = [NO_FINDING] + LUNG_FINDINGS
+
 
 def load_train_csv(csv_path: str | Path) -> pd.DataFrame:
     """Read train.csv and return a DataFrame with a binary label matrix."""
@@ -51,6 +76,13 @@ def load_train_csv(csv_path: str | Path) -> pd.DataFrame:
     # Unknown / -1 values for crack lesions are not part of the public 28 classes.
     df = df[df[ALL_LABELS].sum(axis=1) >= 1]
     return df.reset_index(drop=True)
+
+
+def restrict_to_lung(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop objects with no lung finding and keep only lung label columns."""
+    df = df[df[LUNG_LABELS].sum(axis=1) >= 1].reset_index(drop=True)
+    keep = [c for c in df.columns if c in LUNG_LABELS] + ["image_id"]
+    return df[[*keep]].copy()
 
 
 def load_meta_csv(csv_path: str | Path) -> pd.DataFrame:

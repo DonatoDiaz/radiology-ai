@@ -77,11 +77,13 @@ class VinDrDataset(Dataset):
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         row = self.df.iloc[idx]
         arr = read_image(self._image_path(row["image_id"]))
+        if arr.ndim == 2:
+            arr = np.stack([arr] * 3, axis=-1)  # grayscale -> RGB for model input
         if self.transforms is not None:
             arr = self.transforms(image=arr)["image"]
         else:
             arr = torch.from_numpy(np.ascontiguousarray(arr)).float() / 255.0
-            arr = arr.unsqueeze(0)
+            arr = arr.permute(2, 0, 1)
         target = torch.zeros(len(self.labels), dtype=torch.float32)
         for i, col in enumerate(self.labels):
             target[i] = float(row[col])

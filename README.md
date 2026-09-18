@@ -1,26 +1,27 @@
-# VinDr-CXR Multi-Label Classifier
+# Lung Radiology AI
 
-Мульти-лейбл классификатор рентгенограмм грудной клетки для лучевой триажной диагностики (портфолио-проект).
+AI-классификатор **рентгенограмм грудной клетки** для триажной диагностики лёгочных патологий. Портфолио-проект: Медицина × ИИ.
 
 ## Scope
 
-- Датасет: **VinDr-CXR** (PhysioNet / Kaggle) — 15 000 рентгенограмм, **28 классов** (22 патологии + 6 находок).
-- Тип задачи: multi-label классификация → скоринг рентгенограмм.
-- Backbone: `tf_efficientnet_b0` (timm), 512×512, AMP, AdamW + cosine.
-- Метрики: **mean AUROC** и mean Average Precision по 28 классам.
+- **Датасет:** VinDr-CXR (PhysioNet / Kaggle) — 15 000 рентгенограмм.
+- **Задача:** мульти-лейбл классификация → скоринг находок.
+- **Фокус — лёгкие:** `LUNG_LABELS` — 18 классов (17 патологий паренхимы/плевры/дыхательных путей + «No finding»): ателектаз, консолидация, эмфизема, инфильтрация, плевральный выпот, пневмоторакс, фиброз, узлы/массы и др.
+- **Backbone:** `tf_efficientnet_b0` (timm), 512×512, AMP, AdamW + cosine.
+- **Метрики:** mean AUROC / mean Average Precision + ROC-кривые по классам.
 
 ## Установка
 
 ```bash
-uv sync            # создаст venv и поставит зависимости
-# данные: скачать VinDr-CXR с Kaggle/PhysioNet
-python -m vindr.prepare --data-dir data/vindr --smoke
+uv sync
+# данные: скачать VinDr-CXR с PhysioNet (нужна регистрация), положить в data/vindr/
+uv run vindr-prepare --data-dir data/vindr --smoke
 ```
 
 ## Обучение
 
 ```bash
-python -m vindr.train \
+uv run vindr-train \
   --data-dir data/vindr \
   --backbone tf_efficientnet_b0 \
   --image-size 512 --epochs 25 --batch-size 16 \
@@ -29,33 +30,59 @@ python -m vindr.train \
 
 Лучший чекпоинт: `runs/<backbone>_<size>/best.pt`.
 
-## Инференс
+## EDA-отчёт
 
 ```bash
-python -m vindr.predict --ckpt runs/tf_efficientnet_b0_512/best.pt --image case_001.png --top-k 5
+uv run vindr-eda --data-dir data/vindr --labels lung --out reports
+# графики: class_frequency.png, top_combinations.png, summary.md
+```
+
+## Инференс и Grad-CAM
+
+```bash
+uv run vindr-predict --ckpt runs/.../best.pt --image case_001.dcm --top-k 5
+uv run python scripts/generate_cam.py --ckpt runs/.../best.pt --image case_001.dcm \
+  --class-index 10 --out cam_overlay.png
+```
+
+## Веб-демо
+
+```bash
+uv run uvicorn vindr.app:app --port 8000
+# http://localhost:8000  — загрузка снимка → предсказания
+# http://localhost:8000/predict/cam — Grad-CAM оверлей (POST)
 ```
 
 ## Структура
 
 ```
-configs/train.yaml   # конфиг обучения
+configs/train.yaml      # конфиг обучения
 src/vindr/
-  labels.py          # 28 классов, загрузка train.csv, сплиты
-  data.py            # Dataset (DICOM/PNG + аугментации)
-  model.py           # timm backbone + мульти-лейбл голова
-  metrics.py         # AUROC / AP по классам и macro
-  prepare.py         # подготовка данных, smoke-тест
-  train.py           # цикл обучения (AMP, логгинг, best.pt)
-  predict.py         # инференс по одному снимку
+  labels.py             # 28 классов + подмножество LUNG_LABELS, сплиты
+  data.py               # Dataset (DICOM/PNG + аугментации)
+  model.py              # timm backbone + мульти-лейбл голова
+  metrics.py            # AUROC / AP по классам и macro
+  prepare.py            # подготовка данных, smoke-тест
+  eda.py                # EDA-отчёт (частоты классов, статистика снимков)
+  gradcam.py            # визуализация «куда смотрит модель»
+  plots.py              # ROC-кривые по классам
+  train.py              # цикл обучения (AMP, логгинг, best.pt)
+  predict.py            # инференс по одному снимку
+  app.py                # FastAPI веб-демо
+scripts/generate_cam.py # CLI: Grad-CAM оверлей по чекпоинту
 ```
 
-## Планы (roadmap)
+## Roadmap
 
-- [x] Каркас + тренинг + инференс
-- [ ] Загрузка данных VinDr-CXR
-- [ ] Град-CAM-визуализации
-- [ ] Пакет моделей: КТ-голова (RSNA ICH), МРТ-мозг (BraTS)
-- [ ] EDA-отчёт, ROC-кривые, API-демо
+- [x] Каркас: train / predict / prepare
+- [x] Фокус на лёгкие (`LUNG_LABELS`)
+- [x] Grad-CAM визуализации
+- [x] EDA-отчёт
+- [x] ROC-кривые по классам
+- [x] Веб-демо (FastAPI)
+- [ ] Скачать и подготовить VinDr-CXR, обучить первую модель
+- [ ] КТ-голова (RSNA ICH), МРТ-мозг (BraTS) — пакет «триаж по модальностям»
+- [ ] API-сервис в Docker
 
 ## Лицензия
 

@@ -15,9 +15,10 @@ from albumentations.pytorch import ToTensorV2
 from torch.utils.data import DataLoader
 
 from vindr.data import VinDrDataset
-from vindr.labels import ALL_LABELS, load_train_csv, make_splits
+from vindr.labels import LUNG_LABELS, load_train_csv, make_splits, restrict_to_lung
 from vindr.metrics import compute_metrics
 from vindr.model import build_model, count_parameters_mb
+from vindr.plots import plot_roc_curves, save_confusion_matrix
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("vindr.train")
@@ -93,7 +94,7 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def evaluate(model, loader, device) -> tuple[float, dict[str, float]]:
+def evaluate(model, loader, device, labels) -> tuple[float, dict[str, float], np.ndarray, np.ndarray]:
     model.eval()
     preds, targets = [], []
     total_loss, criterion = 0.0, nn.BCEWithLogitsLoss()
@@ -105,8 +106,8 @@ def evaluate(model, loader, device) -> tuple[float, dict[str, float]]:
         targets.append(y.cpu().numpy())
     y_true = np.concatenate(targets)
     y_pred = np.concatenate(preds)
-    m = compute_metrics(y_true, y_pred, ALL_LABELS)
-    return total_loss / len(y_true), m["macro"]
+    m = compute_metrics(y_true, y_pred, labels)
+    return total_loss / len(y_true), m["macro"], y_true, y_pred
 
 
 def main() -> None:
@@ -120,6 +121,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--weight-decay", type=float, default=1e-5)
     ap.add_argument("--val-fraction", type=float, default=0.15)
+    ap.add_argument("--labels", choices=["lung", "all"], default="lung",
+                    help="which label set to train on; default: lung-focused subset")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--acc-steps", type=int, default=2)
     ap.add_argument("--no-mixed", action="store_true")
@@ -136,14 +139,18 @@ def main() -> None:
 
     data_dir = Path(args.data_dir)
     images_dir = Path(args.images_dir) if args.images_dir else data_dir / "train"
+    label_cols = LUNG_LABELS if args.labels == "lung" else None
     df = load_train_csv(data_dir / "train.csv")
+    if label_cols:
+        df = restrict_to_lung(df)
+    label_cols = label_cols or [c for c in df.columns if c != "image_id" and c != "split"]
     df = make_splits(df, val_fraction=args.val_fraction, seed=args.seed)
 
     train_df = df[df["split"] == "train"].reset_index(drop=True)
     val_df = df[df["split"] == "val"].reset_index(drop=True)
 
-    train_ds = VinDrDataset(train_df, images_dir, ALL_LABELS, build_transforms(args.image_size, True))
-    val_ds = VinDrDataset(val_df, images_dir, ALL_LABELS, build_transforms(args.image_size, False))
+    train_ds = VinDrDataset(train_df, images_dir, label_cols, build_transforms(args.image_size, True))
+    val_ds = VinDrDataset(val_df, images_dir, label_cols, build_transforms(args.image_size, False))
     train_loader = DataLoader(
         train_ds, batch_size=args.batch_size, shuffle=True,
         num_workers=args.num_workers, pin_memory=True,
@@ -154,9 +161,9 @@ def main() -> None:
     )
     log.info("train=%d val=%d", len(train_ds), len(val_ds))
 
-    model = build_model(backbone=args.backbone, num_classes=len(ALL_LABELS))
+    model = build_model(backbone=args.backbone, num_classes=len(label_cols))
     model = model.to(device)
-    log.info("params: %.2fM", count_parameters_mb(model))
+    log.info("params: %.2fM | labels: %s", count_parameters_mb(model), args.labels)
 
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -176,7 +183,7 @@ def main() -> None:
         )
         scheduler.step()
         if epoch % args.eval_every == 0:
-            val_loss, macro = evaluate(model, val_loader, device)
+            val_loss, macro, y_true, y_pred = evaluate(model, val_loader, device, label_cols)
             log.info(
                 "=== epoch %d/%d train_loss=%.4f val_loss=%.4f AUROC=%.4f AP=%.4f (%.0fs) ===",
                 epoch, args.epochs, loss, val_loss, macro["auroc"], macro["ap"],
@@ -191,12 +198,14 @@ def main() -> None:
                         "epoch": epoch,
                         "model_state": model.state_dict(),
                         "metrics": macro,
-                        "labels": ALL_LABELS,
+                        "labels": label_cols,
                         "backbone": args.backbone,
                     },
                     run_dir / "best.pt",
                 )
-                log.info("saved new best: AUROC=%.4f", best_auroc)
+                plot_roc_curves(y_true, y_pred, label_cols, run_dir / "roc_curves.png", top_k=0)
+                save_confusion_matrix(y_true, y_pred, label_cols, run_dir / "auroc_top.png")
+                log.info("saved new best: AUROC=%.4f (+ plots)", best_auroc)
             if not new_best and best_auroc > 0:
                 pass  # future: early stopping callback
     log.info("done. best AUROC=%.4f at %s", best_auroc, run_dir / "best.pt")

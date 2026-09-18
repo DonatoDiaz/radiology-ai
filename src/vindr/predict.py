@@ -22,6 +22,8 @@ log = logging.getLogger("vindr.predict")
 def predict_image(model, image_path: str | Path, image_size: int = 512, device=None) -> np.ndarray:
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     arr = read_image(Path(image_path))
+    if arr.ndim == 2:
+        arr = np.stack([arr] * 3, axis=-1)
     transform = A.Compose(
         [
             A.Resize(image_size, image_size),
