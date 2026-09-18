@@ -59,4 +59,4 @@ src/vindr/
 
 ## Лицензия
 
-Код — MIT. Данные VinDr-CXR — по лицензии VinGroup/PhysioNet (требуется регистрация).
+Код — **GPL-3.0-or-later** (copyleft: любые версии и улучшения обязаны оставаться открытыми). Данные VinDr-CXR — по лицензии VinGroup/PhysioNet (требуется регистрация).
