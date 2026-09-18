@@ -139,11 +139,15 @@ def main() -> None:
 
     data_dir = Path(args.data_dir)
     images_dir = Path(args.images_dir) if args.images_dir else data_dir / "train"
-    label_cols = LUNG_LABELS if args.labels == "lung" else None
     df = load_train_csv(data_dir / "train.csv")
-    if label_cols:
-        df = restrict_to_lung(df)
-    label_cols = label_cols or [c for c in df.columns if c != "image_id" and c != "split"]
+    # Use only labels actually present in the annotations, preferring the
+    # lung-focused subset when those columns exist.
+    available = [c for c in LUNG_LABELS if c in df.columns]
+    if args.labels == "all" or not available:
+        available = [c for c in df.columns if c != "image_id"]
+    label_cols = available
+    df = df[["image_id", *label_cols]].copy()
+    df = df[df[label_cols].sum(axis=1) >= 1].reset_index(drop=True)
     df = make_splits(df, val_fraction=args.val_fraction, seed=args.seed)
 
     train_df = df[df["split"] == "train"].reset_index(drop=True)

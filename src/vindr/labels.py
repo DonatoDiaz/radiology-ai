@@ -72,9 +72,11 @@ def load_train_csv(csv_path: str | Path) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     df = df.rename(columns={"image_id": "image_id"}).copy()
     for col in ALL_LABELS:
-        df[col] = df[col].astype(int)
+        if col in df.columns:
+            df[col] = df[col].astype(int)
     # Unknown / -1 values for crack lesions are not part of the public 28 classes.
-    df = df[df[ALL_LABELS].sum(axis=1) >= 1]
+    present_labels = [c for c in ALL_LABELS if c in df.columns]
+    df = df[df[present_labels].sum(axis=1) >= 1]
     return df.reset_index(drop=True)
 
 
