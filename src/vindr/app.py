@@ -12,12 +12,13 @@ import albumentations as A
 import numpy as np
 import torch
 from albumentations.pytorch import ToTensorV2
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, Form, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from PIL import Image
 
 from vindr.data import read_image
 from vindr.gradcam import GradCAM
+from vindr.i18n import label_name, LANGUAGES
 from vindr.labels import LUNG_LABELS
 from vindr.model import build_model
 
@@ -27,10 +28,11 @@ CKPT_PATH = Path(__file__).resolve().parent.parent.parent / "runs" / "best.pt"
 _image_size = 512
 _model = None
 _cam = None
+_model_labels: list[str] = []
 
 
 def _load_model():
-    global _model, _cam
+    global _model, _cam, _model_labels
     if _model is not None:
         return
     if not CKPT_PATH.exists():
@@ -38,9 +40,10 @@ def _load_model():
             f"No checkpoint found at {CKPT_PATH}. Run training first:  python -m vindr.train"
         )
     ckpt = torch.load(CKPT_PATH, map_location="cpu", weights_only=False)
+    _model_labels = ckpt.get("labels", LUNG_LABELS)
     _model = build_model(
         backbone=ckpt.get("backbone", "tf_efficientnet_b0"),
-        num_classes=len(ckpt.get("labels", LUNG_LABELS)),
+        num_classes=len(_model_labels),
     )
     _model.load_state_dict(ckpt["model_state"])
     _cam = GradCAM(_model)
@@ -69,6 +72,11 @@ async def index():
   <h2>Upload Chest X-ray</h2>
   <form method=post enctype=multipart/form-data action=/predict>
     <input name=file type=file accept="image/*,application/dicom,.dcm">
+    <select name=lang>
+      <option value="en">English</option>
+      <option value="ru" selected>Русский</option>
+      <option value="zh">中文</option>
+    </select>
     <button type=submit>Predict</button>
   </form>
 </body>
@@ -76,7 +84,7 @@ async def index():
 """
 
 @app.post("/predict", response_class=HTMLResponse)
-async def predict(file: UploadFile):
+async def predict(file: UploadFile, lang: str = Form("ru")):
     _load_model()
     raw = await file.read()
     image = Image.open(io.BytesIO(raw)).convert("L")
@@ -87,15 +95,14 @@ async def predict(file: UploadFile):
     with torch.no_grad():
         logits = _model(x.to(device))
     probs = logits.sigmoid().cpu().numpy()[0]
-    labels = [l for l in LUNG_LABELS if not l.startswith("No finding")]
     rows = "\n".join(
-        f"<tr><td>{l}</td><td>{probs[i]:.3f}</td></tr>"
-        for i, l in enumerate(labels)
-        if probs[i] > 0.05
-    ) or "<tr><td colspan=2>No finding detected</td></tr>"
+        f"<tr><td>{label_name(l, lang)}</td><td>{probs[i]:.3f}</td></tr>"
+        for i, l in enumerate(_model_labels)
+        if not l.startswith("No finding") and probs[i] > 0.05
+    ) or f"<tr><td colspan=2>{label_name('No finding', lang)}</td></tr>"
     return f"""
 <table border=1>
-  <tr><th>Finding</th><th>Confidence</th></tr>
+  <tr><th>Finding / Находка / 发现</th><th>Confidence</th></tr>
   {rows}
 </table>
 """

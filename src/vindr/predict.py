@@ -12,6 +12,7 @@ import torch
 from albumentations.pytorch import ToTensorV2
 
 from vindr.data import read_image
+from vindr.i18n import label_name, LANGUAGES
 from vindr.model import build_model
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -41,6 +42,7 @@ def main() -> None:
     ap.add_argument("--ckpt", required=True, help="best.pt checkpoint")
     ap.add_argument("--image", required=True, help="path to a .dcm or .png image")
     ap.add_argument("--top-k", type=int, default=5)
+    ap.add_argument("--lang", choices=LANGUAGES, default="en", help="output language (en/ru/zh)")
     args = ap.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=False)
@@ -50,10 +52,10 @@ def main() -> None:
 
     probs = predict_image(model, args.image)
     order = np.argsort(probs)[::-1][: args.top_k]
-    log.info("top-%-d findings for %s:", args.top_k, args.image)
+    log.info("top-%-d findings for %s (%s):", args.top_k, args.image, args.lang)
     for i in order:
         if probs[i] > 0.1:
-            log.info("  %-24s %.3f", labels[i], probs[i])
+            log.info("  %-24s %.3f", label_name(labels[i], args.lang), probs[i])
 
 
 if __name__ == "__main__":
