@@ -65,6 +65,30 @@ Sanity checks:
 - ROC curves in `reports/demo/roc_curves.png` — the closer a curve is to the top-left corner, the better the class separates (model mean AUROC 0.949);
 - rare classes (e.g. pneumothorax, 96 train images) are detected weaker — expected given the class imbalance.
 
+### Findings glossary (radiological semiotics)
+
+Short radiological descriptions of the model labels (from textbook radiology/CT), printed in the "DESCRIPTION" block of the report:
+
+| Label | Radiological semiotics |
+|-------|------------------------|
+| **Consolidation** | increased density with complete obliteration of alveolar air spaces, vessels no longer visible; typical triangular shadow with its base toward the pleura (lobar pneumonia) |
+| **Lung Opacity** | ground-glass: increased density while vessels and lobules stay visible (alveolar filling, interalveolar septal thickening) |
+| **Infiltration** | ill-defined areas of density with perifocal inflammation; differential: pneumonia / tuberculosis |
+| **Atelectasis** | collapsed lung tissue; air bronchograms → compressive, their absence → obstructive |
+| **Nodule/Mass** | focus up to 1 cm, nodule/mass larger; lobulated/irregular borders and growth → CT, verification when > ~1 cm |
+| **Pleural effusion** | fluid in the pleural space (blunted sinus); empyema when secondarily infected |
+| **Pneumothorax** | air in the pleural space with lung collapse, no lung markings |
+| **Pleural thickening** | parietal pleura thickening, plaques, subpleural linear densities |
+| **Pulmonary fibrosis** | intralobular septal thickening, reticular densities, traction bronchiectasis; honeycombing in the end stage |
+
+### Protocol-style report
+
+Besides the top-k list, `predict` renders a protocol-style text (DESCRIPTION → CONCLUSION → RECOMMENDATIONS, including differential-diagnosis hints) that helps the practitioner interpret the study at the level of a specialist radiologist:
+
+```bash
+uv run vindr-predict --ckpt runs/.../best.pt --image case_001.dcm --lang ru
+```
+
 ## Web demo
 
 ```bash
@@ -88,7 +112,8 @@ src/vindr/
   gradcam.py            # visualize "where the model looks"
   plots.py              # per-class ROC curves
   train.py              # training loop (AMP, logging, best.pt)
-  predict.py            # single-image inference
+  predict.py            # single-image inference + protocol report
+  report.py             # medical knowledge base: glossary, diff rules, protocol
   app.py                # FastAPI web demo
 scripts/generate_cam.py # CLI: Grad-CAM overlay from a checkpoint
 ```

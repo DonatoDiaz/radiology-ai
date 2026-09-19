@@ -14,6 +14,7 @@ from albumentations.pytorch import ToTensorV2
 from vindr.data import read_image
 from vindr.i18n import label_name, LANGUAGES
 from vindr.model import build_model
+from vindr.report import render_protocol
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger("vindr.predict")
@@ -56,6 +57,17 @@ def main() -> None:
     for i in order:
         if probs[i] > 0.1:
             log.info("  %-24s %.3f", label_name(labels[i], args.lang), probs[i])
+    log.info("")
+    log.info(
+        "%s",
+        render_protocol(
+            probs.tolist(),
+            labels,
+            args.lang,
+            image_path=str(args.image),
+            top_k=args.top_k,
+        ),
+    )
 
 
 if __name__ == "__main__":
