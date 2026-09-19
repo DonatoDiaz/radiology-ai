@@ -1,6 +1,6 @@
-# Lung Radiology AI
+# Radiology AI
 
-用于胸放射线（胸部X光）肺部病变分诊诊断的 **AI 分类器**。作品集项目：医学 × AI。
+AI 影像判读系统：先覆盖胸部X光（CXR），后续扩展到 CT 与 MRI。使每位基层医务工作者都能具备影像专科医师水平的判读能力。作品集项目：医学 × AI。
 
 > **阅读语言：** [English](README.en.md) | [Русский](README.ru.md) | [中文](README.zh.md)
 

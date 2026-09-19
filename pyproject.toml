@@ -1,7 +1,7 @@
 [project]
-name = "vindr-classifier"
+name = "radiology-ai"
 version = "0.1.0"
-description = "Multi-label classification of chest X-rays (VinDr-CXR) for radiology triage"
+description = "AI interpretation of imaging studies: CXR multi-label classification (VinDr-CXR), roadmap to CT and MRI"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "torch>=2.4",

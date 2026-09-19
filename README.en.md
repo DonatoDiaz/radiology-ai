@@ -1,6 +1,6 @@
-# Lung Radiology AI
+# Radiology AI
 
-AI classifier for **chest X-rays** to triage lung pathologies. Portfolio project: Medicine × AI.
+AI system for interpreting imaging studies — chest X-rays first (CXR), then CT and MRI. Specialist-level diagnostics for every healthcare worker. Portfolio project: Medicine × AI.
 
 > **Read this in:** [English](README.en.md) | [Русский](README.ru.md) | [中文](README.zh.md)
 
