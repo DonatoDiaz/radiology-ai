@@ -14,6 +14,12 @@ AI-классификатор рентгенограмм грудной клет
 - [**Русский**](README.ru.md)
 - [**中文**](README.zh.md)
 
+## Roadmap / Дорожная карта / 路线图
+
+- [**English**](ROADMAP.en.md)
+- [**Русский**](ROADMAP.ru.md)
+- [**中文**](ROADMAP.zh.md)
+
 ---
 
 **Quick start:**
