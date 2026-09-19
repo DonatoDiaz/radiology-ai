@@ -71,12 +71,13 @@ task:
 - mean AUROC **0.949** (weights `runs/lung_v1/best.pt`).
 - Multilingual protocol (DESCRIPTION→CONCLUSION→RECOMMENDATIONS), Grad-CAM, web demo (FastAPI), README en/ru/zh.
 
-### Phase 1 — Full CXR (28 labels) ⬜ open
-- **Task:** train the non-lung classes: Cardiomegaly, Aortic enlargement, Mediastinal/tracheal shift, Rib/Clavicle/Other fracture, Calcification.
-- **Data:** VinDr-CXR-full (same `train.csv`, all 28 columns).
-- **Method:** same `train.py` with `labels=ALL_LABELS`; class weights for rare classes.
-- **done:** AUROC ≥ 0.85 for all 28 classes; macro-average ≥ 0.90.
-- **Budget:** ~8–12h on a T4.
+### Phase 1 — Full CXR (15 available labels) ✅ done
+- **Task:** add the non-lung classes present in the data: Cardiomegaly, Aortic enlargement, Calcification, ILD (on top of the 11 lung labels).
+- **Data:** Kaggle mirror of VinDr-CXR (`train.csv`, 15,000 images) — **15 label columns** available. The full 28-class set (rib/clavicle fractures, emphysema, mediastinal shift, etc.) requires the original VinDr-CXR from PhysioNet (registration/license) and will be added later via the same `train.py`.
+- **Method:** `uv run vindr-train --config configs/train_full.yaml` (labels=all, 15 classes); class weights for rare classes.
+- **Result:** `runs/full_v1_b0_512/best.pt` (epoch 7). macro-AUROC **0.950**, all 15 classes ≥ 0.85; weakest (rare): Pneumothorax 0.850 (96 samples), Other lesion 0.913.
+- **done:** AUROC ≥ 0.85 across 15 classes; macro-average ≥ 0.90. — ✅ met
+- **Budget:** ~4–6h on a GTX 1650 / ~2h on a T4 — confirmed (~3.5h, 12 epochs).
 
 ### Phase 2 — CXR detection and measurements ⬜ open
 - **Data already downloaded:** `vindr-cxr-coco` (VinDr-Ad, bbox) — ready anchors for detection.

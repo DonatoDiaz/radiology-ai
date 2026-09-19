@@ -70,6 +70,26 @@ GLOSSARY: dict[str, dict[str, str]] = {
         "en": "Interstitial fibrosis: thickening of the intralobular interstitium, linear and reticular densities, traction bronchiectasis, eventually a honeycombing pattern",
         "zh": "间质纤维化：小叶间隔增厚、线样及网状致密影、牵拉性支气管扩张，终末期蜂窝肺改变",
     },
+    "Cardiomegaly": {
+        "ru": "Увеличение сердечной тени: превышение кардиоторакального индекса (ширина сердца / ширина грудной клетки) > 0,5 указывает на кардиомегалию",
+        "en": "Enlarged cardiac silhouette: a cardiothoracic ratio (heart width / chest width) > 0.5 indicates cardiomegaly",
+        "zh": "心影增大：心胸比（心脏宽度 / 胸廓宽度）> 0.5 提示心脏肥大",
+    },
+    "Aortic enlargement": {
+        "ru": "Расширение тени дуги/восходящей аорты; оценивается относительно диаметра грудной аорты на уровне бифуркации; при выраженном расширении — дообследование (эхокардиография, КТ-ангиография)",
+        "en": "Widening of the aortic arch/ascending aorta silhouette; assessed against the thoracic aorta diameter at the bifurcation level; significant widening warrants further work-up (echocardiography, CT angiography)",
+        "zh": "主动脉弓/升主动脉影增宽；按其分叉水平胸主动脉直径评估；显著增宽时需进一步检查（超声心动、CTA）",
+    },
+    "Calcification": {
+        "ru": "Обызвествление: участки плотности, соответствующие отложениям кальция (аортальные дуги, стенки сосудов, плевральные бляшки); cледует отличать от конкрементов по анамнезу",
+        "en": "Calcification: dense areas from calcium deposition (aortic arches, vessel walls, pleural plaques); rule out calculi based on history",
+        "zh": "钙化：致密影为钙盐沉积（主动脉弓、血管壁、胸膜斑）；结合病史与结石鉴别",
+    },
+    "ILD": {
+        "ru": "Поражение интерстиция лёгкого: утолщение междольковых перегородок, перибронховаскулярные линии, сетчатый/линейный паттерн; характерно для интерстициальных заболеваний лёгких",
+        "en": "Interstitial lung involvement: thickening of interlobular septa, peribronchovascular lines, reticular/linear pattern; consistent with interstitial lung disease",
+        "zh": "肺间质受累：小叶间隔增厚、支气管血管束旁线、网状/线样改变；符合间质性肺病",
+    },
 }
 
 # Header rows of the protocol report, per language.

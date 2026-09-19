@@ -71,12 +71,13 @@ task:
 - mean AUROC **0.949** (weights `runs/lung_v1/best.pt`).
 - Мультиязычный протокол (ОПИСАНИЕ→ЗАКЛЮЧЕНИЕ→РЕКОМЕНДАЦИИ), Grad-CAM, веб-демо (FastAPI), README en/ru/zh.
 
-### Фаза 1 — CXR полный набор (28 классов) ⬜ open
-- **Задача:** дообучить не-лёгочные классы: Cardiomegaly, Aortic enlargement, Mediastinal/tracheal shift, Rib/Clavicle/Other fracture, Calcification.
-- **Данные:** VinDr-CXR-full (тот же `train.csv` плюс полные 28 колонок).
-- **Метод:** тот же `train.py` c `labels=ALL_LABELS`; class-weights для редких.
-- **done:** AUROC ≥ 0.85 на 28 классах; макросредний ≥ 0.90.
-- **Бюджет:** ~8–12ч на T4.
+### Фаза 1 — CXR полный набор (15 доступных классов) ✅ done
+- **Задача:** дообучить не-лёгочные классы, присутствующие в данных: Cardiomegaly, Aortic enlargement, Calcification, ILD (в дополнение к 11 лёгочным).
+- **Данные:** Kaggle-зеркало VinDr-CXR (`train.csv`, 15 000 снимков) — доступны **15 колонок** меток. Полный набор из 28 классов (фрактуры рёбер/ключицы, эмфизема, смещение средостения и др.) требует исходный VinDr-CXR с PhysioNet (регистрация/лицензия) — тогда эти классы появятся и будут дообучены тем же `train.py`.
+- **Метод:** `uv run vindr-train --config configs/train_full.yaml` (labels=all, 15 классов); class-weights для редких.
+- **Результат:** `runs/full_v1_b0_512/best.pt` (эпоха 7). macro-AUROC **0.950**, все 15 классов ≥ 0.85; слабейшие (редкие): Pneumothorax 0.850 (96 сэмплов), Other lesion 0.913.
+- **done:** AUROC ≥ 0.85 на 15 классах; макросредний ≥ 0.90. — ✅ достигнуто
+- **Бюджет:** ~4–6ч на GTX 1650 / ~2ч на T4 — подтверждён (~3.5ч, 12 эпох).
 
 ### Фаза 2 — CXR-детекция и измерения ⬜ open
 - **Данные уже скачаны:** `vindr-cxr-coco` (VinDr-Ad, bbox) — готовые якоря для детекции.

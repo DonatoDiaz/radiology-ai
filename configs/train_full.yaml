@@ -1,0 +1,33 @@
+# Phase 1: full VinDr-CXR label set (15 available columns).
+# Real train.csv has 15 classes only (Kaggle mirror); the 27-label ALL_LABELS
+# list requires the full PhysioNet dataset. Run:
+#   uv run vindr-train --config configs/train_full.yaml
+
+data:
+  data_dir: ./data/vindr
+  images_dir: ./data/vindr/images
+  image_size: 512
+  train_batch_size: 4
+  val_batch_size: 8
+  num_workers: 4
+  val_fraction: 0.1
+
+model:
+  backbone: tf_efficientnet_b0
+  pretrained: true
+  labels: all          # all columns present in train.csv (15)
+
+train:
+  epochs: 12
+  lr: 3e-4
+  weight_decay: 1e-5
+  scheduler: cosine
+  warmup_epochs: 2
+  mixed_precision: true
+  seed: 42
+  accumulation_steps: 8
+
+logging:
+  output_dir: ./runs
+  run_name: full_v1_b0_512
+  save_best_metric: auroc_mean

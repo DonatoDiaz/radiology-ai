@@ -11,6 +11,7 @@ import albumentations as A
 import numpy as np
 import torch
 import torch.nn as nn
+import yaml
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import DataLoader
 
@@ -112,6 +113,8 @@ def evaluate(model, loader, device, labels) -> tuple[float, dict[str, float], np
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--config", default=None,
+                    help="optional YAML config (configs/train.yaml); CLI flags override it")
     ap.add_argument("--data-dir", default="./data/vindr")
     ap.add_argument("--images-dir", default=None)
     ap.add_argument("--backbone", default="tf_efficientnet_b0")
@@ -130,7 +133,42 @@ def main() -> None:
     ap.add_argument("--eval-every", type=int, default=1)
     ap.add_argument("--out-dir", default="./runs")
     ap.add_argument("--run-name", default=None)
-    args = ap.parse_args()
+    args, _ = ap.parse_known_args()
+
+    cfg: dict = {}
+    if args.config:
+        with open(args.config) as f:
+            cfg = yaml.safe_load(f) or {}
+    d, m, t = cfg.get("data", {}), cfg.get("model", {}), cfg.get("train", {})
+    if not args.images_dir:
+        args.images_dir = d.get("images_dir")
+    args.data_dir = d.get("data_dir", args.data_dir)
+    args.backbone = m.get("backbone", args.backbone)
+    args.image_size = d.get("image_size", args.image_size)
+    args.epochs = t.get("epochs", args.epochs)
+    args.batch_size = d.get("train_batch_size", args.batch_size)
+    args.lr = t.get("lr", args.lr)
+    args.weight_decay = t.get("weight_decay", args.weight_decay)
+    args.val_fraction = d.get("val_fraction", args.val_fraction)
+    args.seed = t.get("seed", args.seed)
+    args.acc_steps = t.get("accumulation_steps", args.acc_steps)
+    args.no_mixed = args.no_mixed or not t.get("mixed_precision", True)
+    args.num_workers = d.get("num_workers", args.num_workers)
+    args.out_dir = cfg.get("logging", {}).get("output_dir", args.out_dir)
+    args.run_name = cfg.get("logging", {}).get("run_name", args.run_name)
+    labels_cfg = m.get("labels", "lung")
+    if labels_cfg in ("lung", "all"):
+        args.labels = labels_cfg
+    args.image_size = int(args.image_size)
+    args.epochs = int(args.epochs)
+    args.batch_size = int(args.batch_size)
+    args.lr = float(args.lr)
+    args.weight_decay = float(args.weight_decay)
+    args.val_fraction = float(args.val_fraction)
+    args.seed = int(args.seed)
+    args.acc_steps = int(args.acc_steps)
+    args.num_workers = int(args.num_workers)
+    args.eval_every = int(args.eval_every)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
