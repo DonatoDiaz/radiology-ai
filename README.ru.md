@@ -8,9 +8,9 @@ AI-классификатор **рентгенограмм грудной кле
 
 - **Датасет:** VinDr-CXR (PhysioNet / Kaggle) — 15 000 рентгенограмм.
 - **Задача:** мульти-лейбл классификация → скоринг находок.
-- **Фокус — лёгкие:** `LUNG_LABELS` — 18 классов (17 патологий паренхимы/плевры/дыхательных путей + «No finding»): ателектаз, консолидация, эмфизема, инфильтрация, плевральный выпот, пневмоторакс, фиброз, узлы/массы и др.
+- **Модель — 15 классов (фаза 1 завершена):** 11 лёгочных (ателектаз, консолидация, инфильтрация, «матовое стекло», плевральный выпот/утолщение, пневмоторакс, фиброз, узлы/массы и др.) + сердечно-сосудистые/прочие: Cardiomegaly, Aortic enlargement, Calcification, ILD + «No finding».
 - **Backbone:** `tf_efficientnet_b0` (timm), 512×512, AMP, AdamW + cosine.
-- **Метрики:** mean AUROC / mean Average Precision + ROC-кривые по классам.
+- **Метрики:** macro AUROC / macro AP + ROC-кривые по классам.
 
 ## Установка
 
@@ -23,10 +23,12 @@ uv run vindr-prepare --data-dir data/vindr --smoke
 ## Обучение
 
 ```bash
+uv run vindr-train --config configs/train_full.yaml   # фаза 1: 15 классов
+# или вручную:
 uv run vindr-train \
-  --data-dir data/vindr \
-  --backbone tf_efficientnet_b0 \
-  --image-size 512 --epochs 25 --batch-size 16 \
+  --data-dir data/vindr --images-dir data/vindr/images \
+  --labels all --backbone tf_efficientnet_b0 \
+  --image-size 512 --epochs 12 --batch-size 4 \
   --out-dir runs
 ```
 
@@ -62,8 +64,23 @@ uv run python scripts/generate_cam.py --ckpt runs/.../best.pt --image case_001.d
 
 Проверка адекватности:
 - на **нормальном** снимке ожидается `No finding ≈ 1.0`, остальные находки ≈ 0;
-- ROC-кривые в `reports/demo/roc_curves.png` — чем кривая ближе к верхнему левому углу, тем сильнее разделяется класс (mean AUROC модели 0.949);
+- ROC-кривые в `reports/demo/roc_curves.png` — чем кривая ближе к верхнему левому углу, тем сильнее разделяется класс (macro-AUROC модели фазы 1 — 0.950);
 - редкие классы (например пневмоторакс, 96 снимков в train) модель ловит слабее — это ожидаемо при таком class imbalance.
+
+### Метрики (фаза 1, `runs/full_v1_b0_512/best.pt`)
+
+macro-AUROC **0.950** на val (n=1507), все 15 классов ≥ 0.85:
+
+| Класс | AUROC | Класс | AUROC |
+|-------|-------|-------|-------|
+| No finding | 0.991 | Infiltration | 0.955 |
+| Pleural effusion | 0.986 | Pulmonary fibrosis | 0.956 |
+| Cardiomegaly | 0.985 | Lung Opacity | 0.952 |
+| Aortic enlargement | 0.984 | Pleural thickening | 0.950 |
+| ILD | 0.971 | Nodule/Mass | 0.941 |
+| Consolidation | 0.964 | Calcification | 0.927 |
+| Atelectasis | 0.917 | Other lesion | 0.913 |
+| | | Pneumothorax | 0.850 |
 
 ### Глоссарий находок (радиологическая семиотика)
 
@@ -80,6 +97,10 @@ uv run python scripts/generate_cam.py --ckpt runs/.../best.pt --image case_001.d
 | **Pneumothorax** | воздух в плевральной полости с коллапсом лёгкого, безлёгочный рисунок |
 | **Pleural thickening** | утолщение париетальной плевры, шварты, субплевральные линейные плотности |
 | **Pulmonary fibrosis** | утолщение внутридолькового интерстиция, сетчатые плотности, тракционные бронхоэктазы; в исходе — «пчелиные соты» |
+| **Cardiomegaly** | увеличение сердечной тени: кардиоторакальный индекс > 0,5 |
+| **Aortic enlargement** | расширение тени дуги/восходящей аорты; при выраженном — ЭхоКГ/КТ-ангиография |
+| **Calcification** | обызвествление: аортальные дуги, стенки сосудов, плевральные бляшки |
+| **ILD** | поражение интерстиция: утолщение междольковых перегородок, перибронховаскулярные линии, сетчатый паттерн |
 
 ### Протокол-отчёт
 
@@ -100,9 +121,9 @@ uv run uvicorn vindr.app:app --port 8000
 ## Структура
 
 ```
-configs/train.yaml      # конфиг обучения
+configs/train_full.yaml    # конфиг фазы 1 (15 классов)
 src/vindr/
-  labels.py             # 28 классов + подмножество LUNG_LABELS, сплиты
+  labels.py             # 28 классов (полный VinDr) + подмножество доступных, сплиты
   data.py               # Dataset (DICOM/PNG + аугментации)
   model.py              # timm backbone + мульти-лейбл голова
   metrics.py            # AUROC / AP по классам и macro
@@ -111,7 +132,7 @@ src/vindr/
   eda.py                # EDA-отчёт (частоты классов, статистика снимков)
   gradcam.py            # визуализация «куда смотрит модель»
   plots.py              # ROC-кривые по классам
-  train.py              # цикл обучения (AMP, логгинг, best.pt)
+  train.py              # цикл обучения (–config, AMP, логгинг, best.pt)
   predict.py            # инференс по одному снимку + протокол-отчёт
   report.py             # медицинская база знаний: глоссарий, дифф-правила, протокол РФ
   app.py                # FastAPI веб-демо
@@ -121,14 +142,16 @@ scripts/generate_cam.py # CLI: Grad-CAM оверлей по чекпоинту
 ## Roadmap
 
 - [x] Каркас: train / predict / prepare
-- [x] Фокус на лёгкие (`LUNG_LABELS`)
+- [x] Лёгочные метки (`LUNG_LABELS`, mean AUROC 0.949)
 - [x] Grad-CAM визуализации
 - [x] EDA-отчёт
 - [x] ROC-кривые по классам
 - [x] Веб-демо (FastAPI) с выводом на трёх языках (en/ru/zh)
-- [x] Скачать и подготовить VinDr-CXR (Kaggle, 15 000 снимков), обучить первую модель: **mean AUROC 0.949** (Эф-нет-В0, 512px, 5 эпох; веса `runs/lung_v1/best.pt`)
+- [x] **Фаза 1 завершена:** все 15 доступных классов VinDr-CXR, macro-AUROC **0.950** (`runs/full_v1_b0_512/best.pt`)
+- [ ] Фаза 2: детекция находок (YOLOv8s/RT-DETR) по `vindr-cxr-coco`
 - [ ] КТ-голова (RSNA ICH), МРТ-мозг (BraTS) — пакет «триаж по модальностям»
 - [ ] API-сервис в Docker
+  Полная карта — [ROADMAP.ru.md](ROADMAP.ru.md)
 
 ## Лицензия
 

@@ -8,9 +8,9 @@ AI classifier for **chest X-rays** to triage lung pathologies. Portfolio project
 
 - **Dataset:** VinDr-CXR (PhysioNet / Kaggle) — 15,000 chest X-rays.
 - **Task:** multi-label classification → finding scoring.
-- **Lung focus:** `LUNG_LABELS` — 18 classes (17 lung parenchyma/pleura/airway pathologies + "No finding"): atelectasis, consolidation, emphysema, infiltration, pleural effusion, pneumothorax, fibrosis, nodule/mass, etc.
+- **Model — 15 classes (Phase 1 complete):** 11 lung (atelectasis, consolidation, infiltration, ground-glass opacity, pleural effusion/thickening, pneumothorax, fibrosis, nodule/mass, etc.) + cardiovascular/other: Cardiomegaly, Aortic enlargement, Calcification, ILD + "No finding".
 - **Backbone:** `tf_efficientnet_b0` (timm), 512×512, AMP, AdamW + cosine.
-- **Metrics:** mean AUROC / mean Average Precision + per-class ROC curves.
+- **Metrics:** macro AUROC / macro Average Precision + per-class ROC curves.
 
 ## Installation
 
@@ -23,10 +23,12 @@ uv run vindr-prepare --data-dir data/vindr --smoke
 ## Training
 
 ```bash
+uv run vindr-train --config configs/train_full.yaml   # Phase 1: 15 classes
+# or manually:
 uv run vindr-train \
-  --data-dir data/vindr \
-  --backbone tf_efficientnet_b0 \
-  --image-size 512 --epochs 25 --batch-size 16 \
+  --data-dir data/vindr --images-dir data/vindr/images \
+  --labels all --backbone tf_efficientnet_b0 \
+  --image-size 512 --epochs 12 --batch-size 4 \
   --out-dir runs
 ```
 
@@ -62,8 +64,23 @@ uv run python scripts/generate_cam.py --ckpt runs/.../best.pt --image case_001.d
 
 Sanity checks:
 - a **normal** image should give `No finding ≈ 1.0`, others ≈ 0;
-- ROC curves in `reports/demo/roc_curves.png` — the closer a curve is to the top-left corner, the better the class separates (model mean AUROC 0.949);
+- ROC curves in `reports/demo/roc_curves.png` — the closer a curve is to the top-left corner, the better the class separates (Phase 1 model macro-AUROC 0.950);
 - rare classes (e.g. pneumothorax, 96 train images) are detected weaker — expected given the class imbalance.
+
+### Metrics (Phase 1, `runs/full_v1_b0_512/best.pt`)
+
+macro-AUROC **0.950** on val (n=1507), all 15 classes ≥ 0.85:
+
+| Class | AUROC | Class | AUROC |
+|-------|-------|-------|-------|
+| No finding | 0.991 | Infiltration | 0.955 |
+| Pleural effusion | 0.986 | Pulmonary fibrosis | 0.956 |
+| Cardiomegaly | 0.985 | Lung Opacity | 0.952 |
+| Aortic enlargement | 0.984 | Pleural thickening | 0.950 |
+| ILD | 0.971 | Nodule/Mass | 0.941 |
+| Consolidation | 0.964 | Calcification | 0.927 |
+| Atelectasis | 0.917 | Other lesion | 0.913 |
+| | | Pneumothorax | 0.850 |
 
 ### Findings glossary (radiological semiotics)
 
@@ -80,6 +97,10 @@ Short radiological descriptions of the model labels (from textbook radiology/CT)
 | **Pneumothorax** | air in the pleural space with lung collapse, no lung markings |
 | **Pleural thickening** | parietal pleura thickening, plaques, subpleural linear densities |
 | **Pulmonary fibrosis** | intralobular septal thickening, reticular densities, traction bronchiectasis; honeycombing in the end stage |
+| **Cardiomegaly** | enlarged cardiac silhouette: cardiothoracic ratio > 0.5 |
+| **Aortic enlargement** | widening of the aortic arch/ascending aorta; if marked — Echo/CT angiography |
+| **Calcification** | calcification: aortic arches, vessel walls, pleural plaques |
+| **ILD** | interstitial lung involvement: thickened interlobular septa, peribronchovascular lines, reticular pattern |
 
 ### Protocol-style report
 
@@ -100,9 +121,9 @@ uv run uvicorn vindr.app:app --port 8000
 ## Structure
 
 ```
-configs/train.yaml      # training config
+configs/train_full.yaml    # Phase 1 config (15 classes)
 src/vindr/
-  labels.py             # 28 classes + LUNG_LABELS subset, splits
+  labels.py             # 28 classes (full VinDr) + available subset, splits
   data.py               # Dataset (DICOM/PNG + augmentations)
   model.py              # timm backbone + multi-label head
   metrics.py            # per-class AUROC / AP + macro
@@ -111,7 +132,7 @@ src/vindr/
   eda.py                # EDA report (class frequency, image stats)
   gradcam.py            # visualize "where the model looks"
   plots.py              # per-class ROC curves
-  train.py              # training loop (AMP, logging, best.pt)
+  train.py              # training loop (--config, AMP, logging, best.pt)
   predict.py            # single-image inference + protocol report
   report.py             # medical knowledge base: glossary, diff rules, protocol
   app.py                # FastAPI web demo
@@ -121,14 +142,16 @@ scripts/generate_cam.py # CLI: Grad-CAM overlay from a checkpoint
 ## Roadmap
 
 - [x] Scaffold: train / predict / prepare
-- [x] Lung focus (`LUNG_LABELS`)
+- [x] Lung labels (`LUNG_LABELS`, mean AUROC 0.949)
 - [x] Grad-CAM visualizations
 - [x] EDA report
 - [x] Per-class ROC curves
 - [x] Web demo (FastAPI) with multilingual output (en/ru/zh)
-- [x] Download & prepare VinDr-CXR (Kaggle, 15,000 images), train first model: **mean AUROC 0.949** (EffNet-B0, 512px, 5 epochs; weights `runs/lung_v1/best.pt`)
+- [x] **Phase 1 complete:** all 15 available VinDr-CXR classes, macro-AUROC **0.950** (`runs/full_v1_b0_512/best.pt`)
+- [ ] Phase 2: finding detector (YOLOv8s/RT-DETR) on `vindr-cxr-coco`
 - [ ] Head CT (RSNA ICH), brain MRI (BraTS) — "multi-modality triage" package
 - [ ] API service in Docker
+  Full map — [ROADMAP.en.md](ROADMAP.en.md)
 
 ## License
 

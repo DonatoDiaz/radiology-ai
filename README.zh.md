@@ -8,9 +8,9 @@
 
 - **数据集：** VinDr-CXR（PhysioNet / Kaggle）— 15,000 张胸部X光片。
 - **任务：** 多标签分类 → 病变评分。
-- **肺部重点：** `LUNG_LABELS` — 18 类（17 种肺实质/胸膜/气道病变 + “No finding”）：肺不张、实变、肺气肿、浸润、胸腔积液、气胸、纤维化、结节/肿块等。
+- **模型 — 15 类（第1阶段完成）：** 11 个肺部类（肺不张、实变、浸润、磨玻璃影、胸腔积液/增厚、气胸、纤维化、结节/肿块等）+ 心血管/其他：心脏肥大、主动脉增宽、钙化、ILD + “No finding”。
 - **骨干网络：** `tf_efficientnet_b0`（timm），512×512，AMP，AdamW + cosine LR。
-- **指标：** mean AUROC / mean Average Precision + 各类别 ROC 曲线。
+- **指标：** macro AUROC / macro Average Precision + 各类别 ROC 曲线。
 
 ## 安装
 
@@ -23,10 +23,12 @@ uv run vindr-prepare --data-dir data/vindr --smoke
 ## 训练
 
 ```bash
+uv run vindr-train --config configs/train_full.yaml   # 第1阶段：15类
+# 或手动：
 uv run vindr-train \
-  --data-dir data/vindr \
-  --backbone tf_efficientnet_b0 \
-  --image-size 512 --epochs 25 --batch-size 16 \
+  --data-dir data/vindr --images-dir data/vindr/images \
+  --labels all --backbone tf_efficientnet_b0 \
+  --image-size 512 --epochs 12 --batch-size 4 \
   --out-dir runs
 ```
 
@@ -62,8 +64,23 @@ uv run python scripts/generate_cam.py --ckpt runs/.../best.pt --image case_001.d
 
 合理性检查：
 - **正常**片应得到 `No finding ≈ 1.0`，其余病变 ≈ 0；
-- `reports/demo/roc_curves.png` 中的 ROC 曲线 — 曲线越靠近左上角，类别区分越强（模型 mean AUROC 0.949）；
+- `reports/demo/roc_curves.png` 中的 ROC 曲线 — 曲线越靠近左上角，类别区分越强（第1阶段模型 macro-AUROC 0.950）；
 - 稀有类别（如气胸，训练集仅 96 张）检测较弱 — 在类别不平衡下属预期现象。
+
+### 指标（第1阶段，`runs/full_v1_b0_512/best.pt`）
+
+验证集（n=1507）macro-AUROC **0.950**，全部15类 ≥ 0.85：
+
+| 类别 | AUROC | 类别 | AUROC |
+|------|-------|------|-------|
+| No finding | 0.991 | Infiltration | 0.955 |
+| Pleural effusion | 0.986 | Pulmonary fibrosis | 0.956 |
+| Cardiomegaly | 0.985 | Lung Opacity | 0.952 |
+| Aortic enlargement | 0.984 | Pleural thickening | 0.950 |
+| ILD | 0.971 | Nodule/Mass | 0.941 |
+| Consolidation | 0.964 | Calcification | 0.927 |
+| Atelectasis | 0.917 | Other lesion | 0.913 |
+| | | Pneumothorax | 0.850 |
 
 ### 病变术语表（放射学征象）
 
@@ -80,6 +97,10 @@ uv run python scripts/generate_cam.py --ckpt runs/.../best.pt --image case_001.d
 | **气胸** | 胸膜腔积气伴肺萎陷、无肺纹理透亮区 |
 | **胸膜增厚** | 壁层胸膜增厚、斑片、与胸壁平行的线样致密影 |
 | **肺纤维化** | 小叶间隔增厚、网状致密影、牵拉性支气管扩张；终末期蜂窝肺 |
+| **心脏肥大** | 心影增大：心胸比 > 0.5 |
+| **主动脉增宽** | 主动脉弓/升主动脉影增宽；明显增宽时行超声心动/CTA |
+| **钙化** | 钙化影：主动脉弓、血管壁、胸膜斑 |
+| **ILD** | 肺间质受累：小叶间隔增厚、支气管血管束旁线、网状改变 |
 
 ### 报告式输出
 
@@ -100,9 +121,9 @@ uv run uvicorn vindr.app:app --port 8000
 ## 项目结构
 
 ```
-configs/train.yaml      # 训练配置
+configs/train_full.yaml    # 第1阶段配置（15类）
 src/vindr/
-  labels.py             # 28 类 + LUNG_LABELS 子集，数据集划分
+  labels.py             # 28 类（完整 VinDr）+ 可用子集，数据集划分
   data.py               # Dataset（DICOM/PNG + 数据增强）
   model.py              # timm 骨干 + 多标签头
   metrics.py            # 各类别 AUROC / AP + macro
@@ -111,7 +132,7 @@ src/vindr/
   eda.py                # EDA 报告（类别频率、图像统计）
   gradcam.py            # 可视化“模型关注哪里”
   plots.py              # 各类别 ROC 曲线
-  train.py              # 训练循环（AMP、日志、best.pt）
+  train.py              # 训练循环（--config、AMP、日志、best.pt）
   predict.py            # 单图推理 + 报告式输出
   report.py             # 医学知识库：术语表、鉴别规则、报告生成
   app.py                # FastAPI 网页演示
@@ -121,14 +142,16 @@ scripts/generate_cam.py # CLI：从权重生成 Grad-CAM 叠加图
 ## 路线图
 
 - [x] 基础结构：train / predict / prepare
-- [x] 肺部重点（`LUNG_LABELS`）
+- [x] 肺部标签（`LUNG_LABELS`，mean AUROC 0.949）
 - [x] Grad-CAM 可视化
 - [x] EDA 报告
 - [x] 各类别 ROC 曲线
 - [x] 网页演示（FastAPI），支持三语输出（en/ru/zh）
-- [x] 下载并准备 VinDr-CXR（Kaggle，15,000 张图像），训练第一版模型：**mean AUROC 0.949**（EffNet-B0，512px，5 轮；权重 `runs/lung_v1/best.pt`）
+- [x] **第1阶段完成：** VinDr-CXR 全部 15 个可用类别，macro-AUROC **0.950**（`runs/full_v1_b0_512/best.pt`）
+- [ ] 第2阶段：病变检测器（YOLOv8s/RT-DETR）基于 `vindr-cxr-coco`
 - [ ] 头部 CT（RSNA ICH）、脑 MRI（BraTS）—“多模态分诊”套餐
 - [ ] Docker 化的 API 服务
+  完整路线图 — [ROADMAP.zh.md](ROADMAP.zh.md)
 
 ## 许可证
 
