@@ -1,0 +1,19 @@
+path: /run/media/donatodiaz/w_/Github/radiology_data/vinbigdata-cxr-coco/vinbigdata-cxr-ad-coco
+train: images/train
+val: images/val
+
+names:
+  0: Aortic enlargement
+  1: Pleural thickening
+  2: Pleural effusion
+  3: Cardiomegaly
+  4: Lung Opacity
+  5: Nodule/Mass
+  6: Consolidation
+  7: Pulmonary fibrosis
+  8: Infiltration
+  9: Atelectasis
+  10: Other lesion
+  11: ILD
+  12: Pneumothorax
+  13: Calcification

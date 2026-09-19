@@ -12,6 +12,7 @@ import torch
 from albumentations.pytorch import ToTensorV2
 
 from vindr.data import read_image
+from vindr.detect import detect, load_default_detector, render_overlay
 from vindr.i18n import label_name, LANGUAGES
 from vindr.model import build_model
 from vindr.report import render_protocol
@@ -44,6 +45,9 @@ def main() -> None:
     ap.add_argument("--image", required=True, help="path to a .dcm or .png image")
     ap.add_argument("--top-k", type=int, default=5)
     ap.add_argument("--lang", choices=LANGUAGES, default="en", help="output language (en/ru/zh)")
+    ap.add_argument("--detect", action="store_true",
+                    help="also run YOLOv8 detector and save bbox overlay (Phase 2)")
+    ap.add_argument("--det-ckpt", default=None, help="path to detector weights (default: latest runs_det best.pt)")
     args = ap.parse_args()
 
     ckpt = torch.load(args.ckpt, map_location="cpu", weights_only=False)
@@ -68,6 +72,16 @@ def main() -> None:
             top_k=args.top_k,
         ),
     )
+
+    if args.detect:
+        det = load_default_detector(args.det_ckpt)
+        finds = detect(det, args.image)
+        out = Path(args.image).with_name(Path(args.image).stem + "_det.jpg")
+        render_overlay(args.image, finds, out_path=out)
+        log.info("")
+        log.info("detector: %d found (saved %s):", len(finds), out)
+        for f in finds:
+            log.info("  %-24s conf=%.3f  bbox=%s", label_name(f["name"], args.lang), f["conf"], f["bbox"])
 
 
 if __name__ == "__main__":
