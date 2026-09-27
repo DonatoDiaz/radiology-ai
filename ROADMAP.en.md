@@ -79,12 +79,12 @@ task:
 - **done:** AUROC ≥ 0.85 across 15 classes; macro-average ≥ 0.90. — ✅ met
 - **Budget:** ~4–6h on a GTX 1650 / ~2h on a T4 — confirmed (~3.5h, 12 epochs).
 
-### Phase 2 — CXR detection and measurements 🔧 in progress (training at the end)
+### Phase 2 — CXR detection and measurements 🔧 in progress (code ready)
 - **Data already downloaded:** `vindr-cxr-coco` (VinDr-Ad, bbox) — ready anchors for detection.
 - **Task A:** finding detector (YOLOv8s) — box-mAP50 ≥ 0.5; imgsz=1024 (objects are small: median ~0.2% of frame).
 - **Code ready:** COCO→YOLO converter (`scripts/coco2yolo.py`), detection in CLI (`predict --detect`) and web (`/predict/det`), Colab notebook for cloud training.
-- **Training deferred to the end** — cloud T4 (Colab), imgsz=1024; metrics will be filled in after the run.
 - **Task B:** quantitative signs (cardiothoracic ratio, fluid level, "triangular shadow").
+- **Training and validation happen at the very end** (see §6): all code first, then one final training + validation run.
 - **done:** mAP50 ≥ 0.5; R² ≥ 0.9 for measurements on an annotated subset.
 
 ### Phase 3 — Head CT ("Brain" section) ⬜ open
@@ -123,7 +123,20 @@ task:
 - **Substitution calculator:** cost per study (electricity, amortization, licenses) vs. radiologist labor cost; break-even point by study volume.
 - **"Triage across modalities" package:** CXR + head CT + sinuses in one deployment.
 
-## 6. Success metrics (global)
+## 6. Model training and validation — at the very end 🔚 final run
+
+**Principle:** write all the code for every phase first, then train and validate the weights in one final pass. This avoids fitting an incomplete pipeline and lets configs/architecture change before the expensive training.
+
+**Final run order:**
+1. **CXR classifier (Phase 1) — already trained** ✅ macro-AUROC **0.950** (`runs/full_v1_b0_512/best.pt`).
+2. **CXR detector (Phase 2)** — cloud T4 (Colab), `notebooks/phase2_det_colab.ipynb`, imgsz=1024, batch 16, up to 40 epochs, patience 15. Target mAP50 ≥ 0.5.
+3. **Phases 3–8 (head CT, kidney/mediastinum, sinuses, skeleton, GI)** — each trained once its code is finished; heavy ones on volunteers' T4/A100.
+4. **Validation of all models** — run the metrics from §7 for every model; verify measurements (CTR R²) on an annotated subset.
+5. **Protocol UAT** — clinician review (≥ 95% structurally correct reports).
+
+Weights are not committed to the repository (`.gitignore`); they are stored separately and tied to a commit via release/README.
+
+## 7. Success metrics (global)
 
 | Stratum | Metric | Target |
 |---|---|---|
@@ -134,7 +147,7 @@ task:
 | Measurements (R²/abs error) | correlation with ground truth | R² ≥ 0.9 |
 | Protocol | UAT by physician/feldsher (expert consensus) | ≥ 95% correctly structured reports |
 
-## 7. Risks and mitigation
+## 8. Risks and mitigation
 
 | Risk | Mitigation |
 |---|---|
@@ -144,11 +157,11 @@ task:
 | Shortage of manually labeled data (sinuses, GI) | Start public; volunteer crowdsourced annotation |
 | Modality drift across vendors | Normalization (windowing), domain adaptation, continue-finetune |
 
-## 8. Getting started (volunteer quick start)
+## 9. Getting started (volunteer quick start)
 
 1. Clone the repo, `uv sync` (environment is packaged).
 2. Pick an `open` task from the registry (§4) — e.g. `cxr_full_28` or `cxr_det_vindr`.
-3. `uv run vindr-train --config configs/train.yaml` (+ `--out-dir runs/<task>`).
-4. Run `vindr-eda` and `vindr-predict`, hand in weights + a report (checklist along the way).
+3. Write the task code (pipeline, config, metrics) — **do not start training**, see §6.
+4. Run `vindr-eda` and `vindr-predict` on random samples, hand in code + a report.
 
 Each phase is closed by a PR to this file (done checkbox ticked, weights in Releases).
