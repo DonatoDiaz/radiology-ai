@@ -92,8 +92,11 @@ task:
 - **数据：** RSNA ICH、CQ500、Head-CT（HF）、BraTS（MRI，用于肿瘤）。
 - **方法：** 2.5D（≥3层、半3D）在 GTX 1650 上即可实现；更强网络用 3D→2.5D 蒸馏。
 - **笔记征象：** 按部位区分血肿（双凸、受颅缝限制=硬膜外；不受限=硬膜下；沿脑沟=蛛网膜下腔出血）——编入报告。
-- **代码就绪：** DICOM / 16-bit PNG / NIfTI 载入为 HU（`src/vindr/ct/volume.py`），RSNA 准备脚本（`scripts/prepare_head_ct.py`），slice 模型与 attention 池化的 study 模型，覆盖 RSNA 5 个亚型 + `any`（`src/vindr/ct/model.py`），2.5D 数据集（`dataset.py`），训练循环（`train.py`、`vindr-ct-train`），推理与 JSON 报告（`predict.py`、`vindr-ct-predict`），HU 测量——病灶密度/体积、中线移位、Evans 指数（`measure.py`）。流水线由 44 个测试覆盖。
-- **尚未编码：** 病灶检测/分割（定位 dice 目标）、肿瘤与骨折模型、报告征象规则。
+- **代码就绪：** DICOM / 16-bit PNG / NIfTI 载入为 HU（`src/vindr/ct/volume.py`），RSNA 准备脚本（`scripts/prepare_head_ct.py`），slice 模型与 attention 池化的 study 模型，覆盖 RSNA 5 个亚型 + `any`（`src/vindr/ct/model.py`），2.5D 数据集（`dataset.py`），训练循环（`train.py`、`vindr-ct-train`），推理与 JSON 报告（`predict.py`、`vindr-ct-predict`），HU 测量——病灶密度/体积、中线移位、Evans 指数（`measure.py`）。
+- **弱监督标注（RSNA 只有切片级标签，没有像素级掩膜）：** `src/vindr/ct/pseudo.py` 从训练好的切片分类器中挖掘伪掩膜——逐切片 CAM → hi-res 特征图 → 以 CAM 核心为种子的 GrabCut → 急性血 HU 带（50–110，可配置；约 25 HU 的慢性积液需要另一条带）→ 研究级 3D 掩膜，并写出 `pseudo_labels.json` 记录证据（最大/平均概率、z 范围、标注切片数），以便训练按质量过滤。三道保险保证标签可信：CAM 必须**集中**（`cam_sharpness`——归一化 CAM 的最大值按构造就是 1.0，说明不了任何问题）；GrabCut 的种子按像素数量给定而非按数值阈值（阈值在平坦 CAM 上会退化为「整张切片」）；HU 带读取**原始**体素——重采样会把 70 HU 的出血与 30 HU 的脑组织和空气平均掉，在网络网格上算出的带会删掉它本该确认的那个出血。每个原始切片都通过 native→grid 的 z 映射被检查，因此较粗的网格不会漏掉薄出血。`python -m vindr.ct.pseudo_mine --ckpt … --data-dir … --out-dir …` 在每个 `mask.npy` 旁建立影像软链接，产出的数据集可被 `vindr-ct-seg-train` 直接读取。这些是伪标签，不是真值：HU 带与病灶征象都是未经验证的启发式规则，没有真实像素级数据集就无法保证 ROADMAP 的 Dice ≥ 0.7。
+- **定位代码就绪：** 出血掩膜的 2.5D U-Net（`src/vindr/ct/segmentation.py`，BCE + soft Dice，`dice_score`/`iou_score`），与影像同目录的掩膜加载器——`mask.nii.gz` / `mask.npy` / `masks/*.png` / `*_mask.png`（`dataset.py`、`HeadCTSegDataset`），分割训练循环（`train_seg.py`、`vindr-ct-seg-train`、`configs/train_head_ct_seg.yaml`），以及按笔记征象的 3D 病灶提取（`src/vindr/ct/lesions.py`）：相邻切片上的连通域合并，贴骨双凸 → 硬膜外，跨中线的 crescent → 硬膜下，迂曲分布 → 蛛网膜下腔实质内圆形 → 脑内，附体积与 bounding box。通过 `predict --seg-ckpt` 接入推理（可选 `--save-mask`）；`vindr-ct-predict --ckpt … --seg-ckpt …` 同时输出亚型与定位。流水线由 94 个测试覆盖，含合成分类器 → pseudo-mine → `load_masked_studies` → `train_seg` 的端到端运行。
+- **尚未编码：** 肿瘤模型、骨折模型（`measure.py` 中已有 HU 启发式）。
+- **数据待定：** 定位需要像素级掩膜。RSNA 16-bit PNG 仅提供逐层标签，最终训练前需选定带掩膜的数据集（例如 PhysioNet 出血分割）。上述征象是启发式形态学描述，不是诊断。
 - **训练与验证放在最后**（见 §6）：先完成全部代码，再统一训练与验证一次。
 - **完成条件：** 二分类 AUROC ≥ 0.90（出血），亚型 ≥ 0.85；定位 dice ≥ 0.7。
 

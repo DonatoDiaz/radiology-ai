@@ -30,6 +30,7 @@ vindr-predict = "vindr.predict:main"
 vindr-prepare = "vindr.prepare:main"
 vindr-eda = "vindr.eda:main"
 vindr-ct-train = "vindr.ct.train:main"
+vindr-ct-seg-train = "vindr.ct.train_seg:main"
 vindr-ct-predict = "vindr.ct.predict:main"
 
 [build-system]

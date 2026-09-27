@@ -3,12 +3,28 @@
 Modules:
     volume.py  — DICOM / 16-bit PNG / NIfTI loading, HU rescaling, windows, 2.5D slices
     model.py   — 2.5D slice CNN and attention-pooled study model, RSNA hemorrhage labels
-    dataset.py — slice- and study-level torch datasets
+    dataset.py — slice-, study- and mask-level torch datasets
     measure.py — HU-based measurements: density, volume, midline shift, Evans index
+    segmentation.py — 2.5D U-Net for hemorrhage localization (Dice + BCE)
+    lesions.py  — 3D lesion extraction and morphology semiology from a mask
+    pseudo.py  — weakly-supervised masks: CAM -> GrabCut -> HU band (RSNA has no pixel labels)
     train.py   — training loop (final pass, see ROADMAP §6)
+    train_seg.py — segmentation training loop (localization Dice)
 """
 
-from vindr.ct.dataset import HeadCTSliceDataset, HeadCTStudyDataset
+from vindr.ct.dataset import (
+    HeadCTSegDataset,
+    HeadCTSliceDataset,
+    HeadCTStudyDataset,
+    collate_seg,
+    load_masked_studies,
+)
+from vindr.ct.lesions import (
+    find_components,
+    find_lesions,
+    lesion_semiotics,
+    summarize_lesions,
+)
 from vindr.ct.measure import (
     bbox_mask,
     classify_density,
@@ -30,6 +46,22 @@ from vindr.ct.model import (
     build_head_ct_model,
     loss_fn,
     slice_to_study_scores,
+)
+from vindr.ct.pseudo import (
+    cam_sharpness,
+    cam_to_seed,
+    mask_to_volume,
+    pseudo_mask_study,
+    restrict_to_blood_density,
+    write_pseudo_dataset,
+)
+from vindr.ct.segmentation import (
+    HeadCTSegNet,
+    build_seg_model,
+    dice_loss,
+    dice_score,
+    iou_score,
+    seg_loss,
 )
 from vindr.ct.volume import (
     HU_ACUTE_BLOOD,
@@ -57,7 +89,15 @@ __all__ = [  # noqa: RUF022  # grouped by module, not alphabetical, for readabil
     "HeadCTSliceNet", "HeadCTStudyNet", "any_label", "build_head_ct_model",
     "loss_fn", "slice_to_study_scores",
     # dataset
-    "HeadCTSliceDataset", "HeadCTStudyDataset",
+    "HeadCTSliceDataset", "HeadCTStudyDataset", "HeadCTSegDataset",
+    "collate_seg", "load_masked_studies",
+    # segmentation
+    "HeadCTSegNet", "build_seg_model", "dice_loss", "dice_score", "iou_score", "seg_loss",
+    # lesions
+    "find_components", "find_lesions", "lesion_semiotics", "summarize_lesions",
+    # pseudo (weakly-supervised masks from slice-level labels)
+    "cam_sharpness", "cam_to_seed", "mask_to_volume", "pseudo_mask_study",
+    "restrict_to_blood_density", "write_pseudo_dataset",
     # measure
     "bbox_mask", "classify_density", "lesion_density", "lesion_volume_ml", "midline_shift_mm",
     "evans_index", "fracture_suspicion", "summarize_study",

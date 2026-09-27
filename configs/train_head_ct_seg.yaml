@@ -1,0 +1,41 @@
+# Phase 3: head CT hemorrhage segmentation (localization) — 2.5D U-Net.
+# Training is deferred to the final pass (ROADMAP §6); the ROADMAP target for
+# this head is localization Dice >= 0.7.
+#
+# Unlike the classifier, this needs *pixel* masks. The RSNA 16-bit PNG release
+# carries slice-level labels only, so a mask dataset is required; see
+# ROADMAP §Phase 3 for candidates. Expected layout under data.root:
+#
+#   <study_id>/
+#     image.nii.gz | *.png | DICOM files ...   # the scan
+#     mask.nii.gz | mask.npy | masks/*.png     # the mask, same slice order
+#
+# Run:
+#   uv run python -m vindr.ct.train_seg --config configs/train_head_ct_seg.yaml
+#   uv run python -m vindr.ct.train_seg --config configs/train_head_ct_seg.yaml --smoke
+
+data:
+  root: ./data/head_ct_seg               # one subfolder per study, with a mask
+  target_shape: [32, 224, 224]           # (slices, height, width) after resampling
+  context: 1                             # 2.5D: slice + 1 neighbour per side -> 3 channels
+  val_fraction: 0.15                     # split by study, never by slice
+  num_workers: 2
+
+model:
+  width: 32                              # U-Net base width; raise for T4 (64+)
+  depth: 4                               # down/up-sampling pairs
+
+train:
+  epochs: 30
+  batch_size: 8                          # slice batches at 224x224
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  bce_weight: 1.0
+  dice_weight: 1.0                       # BCE alone collapses to "no hemorrhage"
+  threshold: 0.5
+  mixed_precision: true
+
+logging:
+  output_dir: ./runs
+  run_name: head_ct_seg_v1_2p5d
+  save_best_metric: dice
