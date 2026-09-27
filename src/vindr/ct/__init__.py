@@ -6,6 +6,7 @@ Modules:
     dataset.py — slice-, study- and mask-level torch datasets
     measure.py — HU-based measurements: density, volume, midline shift, Evans index
     segmentation.py — 2.5D U-Net for hemorrhage localization (Dice + BCE)
+    fracture.py — skull-vault fracture suspicion: a discontinuity in the bone ring
     lesions.py  — 3D lesion extraction and morphology semiology from a mask
     pseudo.py  — weakly-supervised masks: CAM -> GrabCut -> HU band (RSNA has no pixel labels)
     train.py   — training loop (final pass, see ROADMAP §6)
@@ -18,6 +19,11 @@ from vindr.ct.dataset import (
     HeadCTStudyDataset,
     collate_seg,
     load_masked_studies,
+)
+from vindr.ct.fracture import (
+    analyze_slice,
+    associate_with_hematoma,
+    skull_fractures,
 )
 from vindr.ct.lesions import (
     find_components,
@@ -95,6 +101,8 @@ __all__ = [  # noqa: RUF022  # grouped by module, not alphabetical, for readabil
     "HeadCTSegNet", "build_seg_model", "dice_loss", "dice_score", "iou_score", "seg_loss",
     # lesions
     "find_components", "find_lesions", "lesion_semiotics", "summarize_lesions",
+    # fracture (skull vault)
+    "analyze_slice", "associate_with_hematoma", "skull_fractures",
     # pseudo (weakly-supervised masks from slice-level labels)
     "cam_sharpness", "cam_to_seed", "mask_to_volume", "pseudo_mask_study",
     "restrict_to_blood_density", "write_pseudo_dataset",

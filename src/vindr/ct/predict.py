@@ -2,6 +2,7 @@
 
     python -m vindr.ct.predict --input study_dir_or_nifti --ckpt best.pt
     python -m vindr.ct.predict --input study --ckpt seg_best.pt --seg-ckpt seg_best.pt --measure
+    python -m vindr.ct.predict --input study --ckpt best.pt --measure   # adds fracture screening
 """
 
 from __future__ import annotations
@@ -16,9 +17,11 @@ import torch
 from torch.utils.data import DataLoader
 
 from vindr.ct.dataset import HeadCTSliceDataset, HeadCTStudyDataset, collate_slices
+from vindr.ct.fracture import associate_with_hematoma, skull_fractures
 from vindr.ct.lesions import summarize_lesions
 from vindr.ct.measure import summarize_study
 from vindr.ct.model import HEMORRHAGE_TYPES, NUM_OUTPUTS, build_head_ct_model, slice_to_study_scores
+from vindr.ct.pseudo import _resize_mask_to
 from vindr.ct.segmentation import build_seg_model
 from vindr.ct.volume import (
     CTSeries,
@@ -227,11 +230,21 @@ def main() -> None:
     if args.measure or args.seg_ckpt:
         # midline shift / Evans on the native grid, volumes on the mask's grid
         meas = summarize_study(series)
+        meas["skull_fractures"] = skull_fractures(series)
+        if meas["skull_fractures"]["flag"]:
+            log.info(
+                "skull fracture suspicion: %d candidate line(s), %d debris fragment(s)",
+                meas["skull_fractures"]["n_candidate_lines"],
+                meas["skull_fractures"]["n_debris"],
+            )
         if args.seg_ckpt and mask.any():
             grid_meas = summarize_study(grid, mask)
             for key in ("lesion_density", "lesion_volume"):
                 if key in grid_meas:
                     meas[key] = grid_meas[key]
+            pairing = associate_with_hematoma(series, _resize_mask_to(mask, series.shape))
+            if pairing["adjacent"]:
+                meas["hematoma_bone_contact"] = pairing
         result["measurements"] = meas
         result["disclaimer"] = (
             "Heuristic HU measurements and morphology hints for research use only — "

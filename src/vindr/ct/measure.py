@@ -157,19 +157,17 @@ def evans_index(volume: np.ndarray) -> dict:
     }
 
 
-def fracture_suspicion(series: CTSeries, min_area_px: int = 30) -> dict:
-    """Flag slices with abnormally dense bone (possible fracture, bone window)."""
-    dense = series.volume > 700.0
-    flags = []
-    for z in range(series.volume.shape[0]):
-        n = int(dense[z].sum())
-        if n >= min_area_px:
-            flags.append({"slice": z, "n_px": n})
-    return {
-        "n_slices_with_dense_bone": len(flags),
-        "slices": flags[:10],
-        "note": "плотность > 700 HU — кандидат на перелом; подтвердить в bone-окне",
-    }
+def fracture_suspicion(series: CTSeries, min_slices: int = 2) -> dict:
+    """Skull-vault fracture suspicion.
+
+    The whole calvarium is above 700 HU, so counting dense voxels flagged every
+    normal study; the real detector looks for a discontinuity in the vault ring
+    and lives in :mod:`vindr.ct.fracture`. Kept here as the measure-module
+    entry point.
+    """
+    from vindr.ct.fracture import skull_fractures
+
+    return skull_fractures(series, min_slices=min_slices)
 
 
 def summarize_study(series: CTSeries, lesion_mask: np.ndarray | None = None) -> dict:
@@ -180,6 +178,7 @@ def summarize_study(series: CTSeries, lesion_mask: np.ndarray | None = None) -> 
         "spacing_mm": tuple(round(float(v), 2) for v in series.spacing),
         "midline_shift": midline_shift_mm(series),
         "hydrocephalus": evans_index(series.volume),
+        "fracture_suspicion": fracture_suspicion(series),
     }
     if lesion_mask is not None and np.asarray(lesion_mask).any():
         out["lesion_density"] = lesion_density(series.volume, lesion_mask)
