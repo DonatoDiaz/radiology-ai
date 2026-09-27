@@ -123,14 +123,14 @@ task:
 - **Substitution calculator:** cost per study (electricity, amortization, licenses) vs. radiologist labor cost; break-even point by study volume.
 - **"Triage across modalities" package:** CXR + head CT + sinuses in one deployment.
 
-## 6. Model training and validation — at the very end 🔚 final run
+## 6. Model training and validation — at the very end 🔚 one single final run
 
-**Principle:** write all the code for every phase first, then train and validate the weights in one final pass. This avoids fitting an incomplete pipeline and lets configs/architecture change before the expensive training.
+**Principle:** write **all the code for every phase** first (all organ systems — from CXR to GI), and only when the whole program is ready, train and validate **all weights in one final pass**. This lets configs, architecture and pipelines change before the expensive training, so models are trained on the final version of the code.
 
-**Final run order:**
+**Final run order (once all code is done):**
 1. **CXR classifier (Phase 1) — already trained** ✅ macro-AUROC **0.950** (`runs/full_v1_b0_512/best.pt`).
 2. **CXR detector (Phase 2)** — cloud T4 (Colab), `notebooks/phase2_det_colab.ipynb`, imgsz=1024, batch 16, up to 40 epochs, patience 15. Target mAP50 ≥ 0.5.
-3. **Phases 3–8 (head CT, kidney/mediastinum, sinuses, skeleton, GI)** — each trained once its code is finished; heavy ones on volunteers' T4/A100.
+3. **All CT/MRI models (Phases 3–8)** — trained as one package once their code is ready: head CT, kidney/mediastinum, sinuses, skeleton, GI. Heavy ones (2.5D/3D) on volunteers' T4/A100.
 4. **Validation of all models** — run the metrics from §7 for every model; verify measurements (CTR R²) on an annotated subset.
 5. **Protocol UAT** — clinician review (≥ 95% structurally correct reports).
 
