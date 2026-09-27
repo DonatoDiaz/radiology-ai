@@ -30,4 +30,6 @@ uv run vindr-predict --ckpt runs/.../best.pt --image case_001.dcm --top-k 5 --la
 uv run uvicorn vindr.app:app --port 8000   # web demo, language select: en/ru/zh
 ```
 
-Trained model — **mean AUROC 0.949** (`runs/lung_v1/best.pt`). Code license — **GPL-3.0-or-later**.
+Phase 1 — classification, **mean AUROC 0.949** (`runs/lung_v1/best.pt`).
+Phase 2 — detection (YOLOv8s, 14 VinDr-Ad classes): `vindr-predict --detect`, `POST /predict/det`, cloud training notebook in `notebooks/`.
+Code license — **GPL-3.0-or-later**.

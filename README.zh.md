@@ -118,14 +118,46 @@ uv run uvicorn vindr.app:app --port 8000
 # http://localhost:8000/predict/cam — Grad-CAM 叠加图（POST）
 ```
 
+## 第2阶段：病灶检测（YOLOv8s）
+
+除分类外，系统还能定位病灶——为 14 个类别（`vindr-cxr-coco`，VinDr-Ad）输出边界框。
+
+**推理（权重位于 `runs_det/*/weights/best.pt`）：**
+```bash
+uv run vindr-predict --ckpt runs/full_v1_b0_512/best.pt --image case_001.jpg --lang zh --detect
+# → 生成 <image>_det.jpg（bbox 叠加图）+ 病灶列表（类别、置信度、坐标）
+```
+
+**Web 检测接口：**
+```bash
+curl -F file=@case_001.jpg http://localhost:8000/predict/det -o overlay.jpg
+# /predict 表单有「Detection」复选框——分类结果下方显示 bbox 表格
+```
+
+**训练（云端 Colab T4）：** 整个流程代码已就绪，训练推迟到最后。
+```bash
+# 1) COCO → YOLO（本地，已完成）
+uv run python scripts/coco2yolo.py --coco <path>/vinbigdata-cxr-ad-coco --out <path>/vinbigdata-cxr-ad-coco
+# 2) 云端训练——在 Colab（GPU）中打开 notebooks/phase2_det_colab.ipynb，Run all
+# imgsz=1024（病灶很小：中位约 0.2% 画面），batch 16，最多 40 轮
+```
+mAP50 指标将在云端训练完成后回填（目标 ≥ 0.5）。
+
+### 测量（任务B）
+`vindr.measure` 根据检测框计算**心胸比（CTR）**= 心脏宽度 / 胸廓宽度；CTR > 0.50 为心脏增大的影像学标准。同时输出积液提示（弧形液面/液平）。在 `--detect` 与网页表格中显示。
+
 ## 项目结构
 
 ```
 configs/train_full.yaml    # 第1阶段配置（15类）
+configs/det_vindr.yaml     # 第2阶段检测配置（YOLO，14类）
+notebooks/phase2_det_colab.ipynb   # 云端检测器训练（Colab GPU）
 src/vindr/
   labels.py             # 28 类（完整 VinDr）+ 可用子集，数据集划分
   data.py               # Dataset（DICOM/PNG + 数据增强）
   model.py              # timm 骨干 + 多标签头
+  detect.py             # YOLOv8 检测器：懒加载、bbox、叠加图
+  measure.py            # 定量测量：心胸比、胸腔积液
   metrics.py            # 各类别 AUROC / AP + macro
   i18n.py               # 标签翻译（en/ru/zh）
   prepare.py            # 数据准备、冒烟测试
@@ -133,9 +165,10 @@ src/vindr/
   gradcam.py            # 可视化“模型关注哪里”
   plots.py              # 各类别 ROC 曲线
   train.py              # 训练循环（--config、AMP、日志、best.pt）
-  predict.py            # 单图推理 + 报告式输出
+  predict.py            # 单图推理 + 报告式输出（+ --detect）
   report.py             # 医学知识库：术语表、鉴别规则、报告生成
-  app.py                # FastAPI 网页演示
+  app.py                # FastAPI 网页演示（+ /predict/det）
+scripts/coco2yolo.py    # COCO 标注 → YOLO 格式转换器
 scripts/generate_cam.py # CLI：从权重生成 Grad-CAM 叠加图
 ```
 
@@ -148,7 +181,8 @@ scripts/generate_cam.py # CLI：从权重生成 Grad-CAM 叠加图
 - [x] 各类别 ROC 曲线
 - [x] 网页演示（FastAPI），支持三语输出（en/ru/zh）
 - [x] **第1阶段完成：** VinDr-CXR 全部 15 个可用类别，macro-AUROC **0.950**（`runs/full_v1_b0_512/best.pt`）
-- [ ] 第2阶段：病变检测器（YOLOv8s/RT-DETR）基于 `vindr-cxr-coco`
+- [x] 第2阶段（代码）：COCO→YOLO 转换器、CLI 与 Web 检测（`/predict/det`）、云端训练用 Colab 笔记本
+- [ ] 第2阶段（训练）：云端 T4，imgsz=1024 → mAP50 ≥ 0.5（放在最后，代码全部完成后再做）
 - [ ] 头部 CT（RSNA ICH）、脑 MRI（BraTS）—“多模态分诊”套餐
 - [ ] Docker 化的 API 服务
   完整路线图 — [ROADMAP.zh.md](ROADMAP.zh.md)

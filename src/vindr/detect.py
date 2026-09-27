@@ -100,13 +100,17 @@ class DetectionModel:
 _default_weights = None
 
 
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent.parent
+
+
 def load_default_detector(ckpt: str | Path | None = None):
     """Create a DetectionModel from runs_det or explicit weights path."""
     global _default_weights
     if ckpt is None:
         if _default_weights is None:
             cands = sorted(
-                Path("/run/media/donatodiaz/w_/Github/radiology/runs_det").glob("*/weights/best.pt"),
+                (_repo_root() / "runs_det").glob("*/weights/best.pt"),
                 key=lambda p: p.stat().st_mtime,
             )
             if not cands:

@@ -14,6 +14,7 @@ from albumentations.pytorch import ToTensorV2
 from vindr.data import read_image
 from vindr.detect import detect, load_default_detector, render_overlay
 from vindr.i18n import label_name, LANGUAGES
+from vindr.measure import cardiothoracic_ratio, fluid_level_hint
 from vindr.model import build_model
 from vindr.report import render_protocol
 
@@ -82,6 +83,15 @@ def main() -> None:
         log.info("detector: %d found (saved %s):", len(finds), out)
         for f in finds:
             log.info("  %-24s conf=%.3f  bbox=%s", label_name(f["name"], args.lang), f["conf"], f["bbox"])
+        img_w = read_image(Path(args.image)).shape[1]
+        ctr = cardiothoracic_ratio(finds, image_width=img_w)
+        if ctr.get("ctr") is not None:
+            log.info("")
+            log.info("measurements:")
+            log.info("  cardiothoracic ratio  %.3f  (%s)", ctr["ctr"], ctr["interpretation"])
+        fluid = fluid_level_hint(finds)
+        if fluid.get("flag"):
+            log.info("  %-24s %s", fluid["flag"], fluid["hint"])
 
 
 if __name__ == "__main__":

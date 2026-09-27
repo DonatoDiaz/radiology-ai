@@ -79,13 +79,12 @@ task:
 - **done:** AUROC ≥ 0.85 across 15 classes; macro-average ≥ 0.90. — ✅ met
 - **Budget:** ~4–6h on a GTX 1650 / ~2h on a T4 — confirmed (~3.5h, 12 epochs).
 
-### Phase 2 — CXR detection and measurements ⬜ open
+### Phase 2 — CXR detection and measurements 🔧 in progress (training at the end)
 - **Data already downloaded:** `vindr-cxr-coco` (VinDr-Ad, bbox) — ready anchors for detection.
-- **Task A:** finding detector (YOLOv8s / RT-DETR) — box-mAP50 ≥ 0.5; support sub-seg labels.
-- **Task B:** quantitative signs from the teaching notes:
-  - cardiothoracic ratio (heart vs. chest width);
-  - fluid level in sinus/pleura;
-  - "triangular shadow" shape of consolidation (apex toward the hilum, base toward the pleura).
+- **Task A:** finding detector (YOLOv8s) — box-mAP50 ≥ 0.5; imgsz=1024 (objects are small: median ~0.2% of frame).
+- **Code ready:** COCO→YOLO converter (`scripts/coco2yolo.py`), detection in CLI (`predict --detect`) and web (`/predict/det`), Colab notebook for cloud training.
+- **Training deferred to the end** — cloud T4 (Colab), imgsz=1024; metrics will be filled in after the run.
+- **Task B:** quantitative signs (cardiothoracic ratio, fluid level, "triangular shadow").
 - **done:** mAP50 ≥ 0.5; R² ≥ 0.9 for measurements on an annotated subset.
 
 ### Phase 3 — Head CT ("Brain" section) ⬜ open

@@ -118,14 +118,46 @@ uv run uvicorn vindr.app:app --port 8000
 # http://localhost:8000/predict/cam — Grad-CAM overlay (POST)
 ```
 
+## Phase 2: finding detection (YOLOv8s)
+
+Besides classification, the system localizes findings — bounding boxes for 14 categories (`vindr-cxr-coco`, VinDr-Ad).
+
+**Inference (weights in `runs_det/*/weights/best.pt`):**
+```bash
+uv run vindr-predict --ckpt runs/full_v1_b0_512/best.pt --image case_001.jpg --lang en --detect
+# → <image>_det.jpg with bbox overlay + list of findings (class, conf, coordinates)
+```
+
+**Web detection endpoint:**
+```bash
+curl -F file=@case_001.jpg http://localhost:8000/predict/det -o overlay.jpg
+# The /predict form has a "Detection" checkbox — bbox table under the classification
+```
+
+**Training (cloud, Colab T4):** the whole pipeline code is ready, training is deferred to the end.
+```bash
+# 1) COCO → YOLO (local, already done)
+uv run python scripts/coco2yolo.py --coco <path>/vinbigdata-cxr-ad-coco --out <path>/vinbigdata-cxr-ad-coco
+# 2) train in the cloud — open notebooks/phase2_det_colab.ipynb in Colab (GPU), Run all
+# imgsz=1024 (small objects: median ~0.2% of frame), batch 16, up to 40 epochs
+```
+mAP50 metrics will be filled in after cloud training (target ≥ 0.5).
+
+### Measurements (Task B)
+`vindr.measure` computes the **cardiothoracic ratio (CTR)** = cardiac width / thoracic width from detector boxes; CTR > 0.50 is the radiographic criterion for cardiomegaly. It also emits an effusion hint (meniscus / fluid level). Shown with `--detect` and in the web table.
+
 ## Structure
 
 ```
 configs/train_full.yaml    # Phase 1 config (15 classes)
+configs/det_vindr.yaml     # Phase 2 detection config (YOLO, 14 classes)
+notebooks/phase2_det_colab.ipynb   # cloud detector training (Colab GPU)
 src/vindr/
   labels.py             # 28 classes (full VinDr) + available subset, splits
   data.py               # Dataset (DICOM/PNG + augmentations)
   model.py              # timm backbone + multi-label head
+  detect.py             # YOLOv8 detector: lazy load, bbox, overlay
+  measure.py            # quantitative measurements: cardiothoracic ratio, effusion
   metrics.py            # per-class AUROC / AP + macro
   i18n.py               # label translations (en/ru/zh)
   prepare.py            # data prep, smoke test
@@ -133,9 +165,10 @@ src/vindr/
   gradcam.py            # visualize "where the model looks"
   plots.py              # per-class ROC curves
   train.py              # training loop (--config, AMP, logging, best.pt)
-  predict.py            # single-image inference + protocol report
+  predict.py            # single-image inference + protocol report (+ --detect)
   report.py             # medical knowledge base: glossary, diff rules, protocol
-  app.py                # FastAPI web demo
+  app.py                # FastAPI web demo (+ /predict/det)
+scripts/coco2yolo.py    # COCO annotation → YOLO format converter
 scripts/generate_cam.py # CLI: Grad-CAM overlay from a checkpoint
 ```
 
@@ -148,7 +181,8 @@ scripts/generate_cam.py # CLI: Grad-CAM overlay from a checkpoint
 - [x] Per-class ROC curves
 - [x] Web demo (FastAPI) with multilingual output (en/ru/zh)
 - [x] **Phase 1 complete:** all 15 available VinDr-CXR classes, macro-AUROC **0.950** (`runs/full_v1_b0_512/best.pt`)
-- [ ] Phase 2: finding detector (YOLOv8s/RT-DETR) on `vindr-cxr-coco`
+- [x] Phase 2 (code): COCO→YOLO converter, detection in CLI + web (`/predict/det`), Colab notebook for cloud training
+- [ ] Phase 2 (training): cloud T4, imgsz=1024 → mAP50 ≥ 0.5 (at the end, once all code is done)
 - [ ] Head CT (RSNA ICH), brain MRI (BraTS) — "multi-modality triage" package
 - [ ] API service in Docker
   Full map — [ROADMAP.en.md](ROADMAP.en.md)

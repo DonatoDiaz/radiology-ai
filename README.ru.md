@@ -118,14 +118,46 @@ uv run uvicorn vindr.app:app --port 8000
 # http://localhost:8000/predict/cam — Grad-CAM оверлей (POST)
 ```
 
+## Фаза 2: детекция находок (YOLOv8s)
+
+Помимо классификации, система локализует находки — bounding boxes для 14 категорий (`vindr-cxr-coco`, VinDr-Ad).
+
+**Инференс (веса в `runs_det/*/weights/best.pt`):**
+```bash
+uv run vindr-predict --ckpt runs/full_v1_b0_512/best.pt --image case_001.jpg --lang ru --detect
+# → <image>_det.jpg с bbox-оверлеем + список находок (класс, conf, координаты)
+```
+
+**Веб-эндпоинт детекции:**
+```bash
+curl -F file=@case_001.jpg http://localhost:8000/predict/det -o overlay.jpg
+# В веб-интерфейсе /predict есть чекбокс «Detection» — таблица bbox под классификацией
+```
+
+**Обучение (облако, Colab T4):** весь код пайплайна готов, обучение отложено в конец.
+```bash
+# 1) COCO → YOLO (локально, уже выполнено)
+uv run python scripts/coco2yolo.py --coco <path>/vinbigdata-cxr-ad-coco --out <path>/vinbigdata-cxr-ad-coco
+# 2) обучение в облаке — открыть notebooks/phase2_det_colab.ipynb в Colab (GPU), Run all
+# imgsz=1024 (мелкие объекты: медиана ~0.2% кадра), batch 16, до 40 эпох
+```
+Метрики mAP50 будут вписаны после облачного обучения (цель ≥ 0.5).
+
+### Измерения (задача B)
+`vindr.measure` считает **кардиоторакальный индекс (КТИ)** = ширина сердечной тени / ширина грудной клетки по bbox детектора; КТИ > 0.50 — рентгенологический критерий кардиомегалии. Также формируется подсказка по выпоту (мениск/уровень жидкости). Выводятся вместе с `--detect` и в веб-таблице.
+
 ## Структура
 
 ```
 configs/train_full.yaml    # конфиг фазы 1 (15 классов)
+configs/det_vindr.yaml     # конфиг детекции фазы 2 (YOLO, 14 классов)
+notebooks/phase2_det_colab.ipynb   # облачное обучение детектора (Colab GPU)
 src/vindr/
   labels.py             # 28 классов (полный VinDr) + подмножество доступных, сплиты
   data.py               # Dataset (DICOM/PNG + аугментации)
   model.py              # timm backbone + мульти-лейбл голова
+  detect.py             # YOLOv8-детектор: ленивая загрузка, bbox, оверлей
+  measure.py            # количественные измерения: кардиоторакальный индекс, выпот
   metrics.py            # AUROC / AP по классам и macro
   i18n.py               # переводы меток (en/ru/zh)
   prepare.py            # подготовка данных, smoke-тест
@@ -133,9 +165,10 @@ src/vindr/
   gradcam.py            # визуализация «куда смотрит модель»
   plots.py              # ROC-кривые по классам
   train.py              # цикл обучения (–config, AMP, логгинг, best.pt)
-  predict.py            # инференс по одному снимку + протокол-отчёт
+  predict.py            # инференс по одному снимку + протокол-отчёт (+ --detect)
   report.py             # медицинская база знаний: глоссарий, дифф-правила, протокол РФ
-  app.py                # FastAPI веб-демо
+  app.py                # FastAPI веб-демо (+ /predict/det)
+scripts/coco2yolo.py    # конвертер аннотаций COCO → формат YOLO
 scripts/generate_cam.py # CLI: Grad-CAM оверлей по чекпоинту
 ```
 
@@ -148,7 +181,8 @@ scripts/generate_cam.py # CLI: Grad-CAM оверлей по чекпоинту
 - [x] ROC-кривые по классам
 - [x] Веб-демо (FastAPI) с выводом на трёх языках (en/ru/zh)
 - [x] **Фаза 1 завершена:** все 15 доступных классов VinDr-CXR, macro-AUROC **0.950** (`runs/full_v1_b0_512/best.pt`)
-- [ ] Фаза 2: детекция находок (YOLOv8s/RT-DETR) по `vindr-cxr-coco`
+- [x] Фаза 2 (код): конвертер COCO→YOLO, детекция в CLI + веб (`/predict/det`), Colab-ноутбук для облачного обучения
+- [ ] Фаза 2 (обучение): облачный T4, imgsz=1024 → mAP50 ≥ 0.5 (в конце, когда весь код готов)
 - [ ] КТ-голова (RSNA ICH), МРТ-мозг (BraTS) — пакет «триаж по модальностям»
 - [ ] API-сервис в Docker
   Полная карта — [ROADMAP.ru.md](ROADMAP.ru.md)

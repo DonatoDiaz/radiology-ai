@@ -17,9 +17,11 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from PIL import Image
 
 from vindr.data import read_image
+from vindr.detect import detect, load_default_detector, render_overlay
 from vindr.gradcam import GradCAM
 from vindr.i18n import label_name, LANGUAGES
 from vindr.labels import LUNG_LABELS
+from vindr.measure import cardiothoracic_ratio, fluid_level_hint
 from vindr.model import build_model
 
 app = FastAPI(title="Lung Radiology AI Demo", docs_url="/docs")
@@ -28,6 +30,7 @@ CKPT_PATH = Path(__file__).resolve().parent.parent.parent / "runs" / "best.pt"
 _image_size = 512
 _model = None
 _cam = None
+_detector = None
 _model_labels: list[str] = []
 
 
@@ -77,14 +80,33 @@ async def index():
       <option value="ru" selected>Русский</option>
       <option value="zh">中文</option>
     </select>
+    <label><input type=checkbox name=detect> Detection (bounding boxes)</label>
     <button type=submit>Predict</button>
   </form>
 </body>
 </html>
 """
 
+def _detect_finds(raw: bytes):
+    """Run detector on raw image bytes; return (findings, RGB overlay array)."""
+    global _detector
+    if _detector is None:
+        _detector = load_default_detector()
+    tmp = Path("_det_input.png")
+    tmp.write_bytes(raw)
+    try:
+        finds = detect(_detector, tmp)
+        arr = render_overlay(tmp, finds)
+        img_w = read_image(tmp).shape[1]
+    finally:
+        tmp.unlink(missing_ok=True)
+    ctr = cardiothoracic_ratio(finds, image_width=img_w)
+    fluid = fluid_level_hint(finds)
+    return finds, arr, ctr, fluid
+
+
 @app.post("/predict", response_class=HTMLResponse)
-async def predict(file: UploadFile, lang: str = Form("ru")):
+async def predict(file: UploadFile, lang: str = Form("ru"), detect_enabled: bool = Form(False)):
     _load_model()
     raw = await file.read()
     image = Image.open(io.BytesIO(raw)).convert("L")
@@ -100,12 +122,54 @@ async def predict(file: UploadFile, lang: str = Form("ru")):
         for i, l in enumerate(_model_labels)
         if not l.startswith("No finding") and probs[i] > 0.05
     ) or f"<tr><td colspan=2>{label_name('No finding', lang)}</td></tr>"
+    det_html = ""
+    if detect_enabled:
+        finds, _, ctr, fluid = _detect_finds(raw)
+        det_rows = "\n".join(
+            f"<tr><td>{label_name(d['name'], lang)}</td>"
+            f"<td>{d['conf']:.3f}</td>"
+            f"<td>[{d['bbox'][0]:.0f},{d['bbox'][1]:.0f},{d['bbox'][2]:.0f},{d['bbox'][3]:.0f}]</td></tr>"
+            for d in finds
+        ) or f"<tr><td colspan=3>{label_name('No finding', lang)}</td></tr>"
+        meas = ""
+        if ctr.get("ctr") is not None:
+            meas += (
+                f"<tr><td>Кардиоторакальный индекс / CTR</td>"
+                f"<td>{ctr['ctr']:.3f}</td><td>{ctr['interpretation']}</td></tr>"
+            )
+        if fluid.get("flag"):
+            meas += (
+                f"<tr><td>Выпот / Effusion</td><td>{fluid['flag']}</td>"
+                f"<td>{fluid['hint']}</td></tr>"
+            )
+        meas_html = (
+            f"<h3>Измерения / Measurements</h3><table border=1>{meas}</table>" if meas else ""
+        )
+        det_html = f"""
+<h3>Detection</h3>
+<table border=1>
+  <tr><th>Finding</th><th>Confidence</th><th>BBox (x1 y1 x2 y2)</th></tr>
+  {det_rows}
+</table>
+{meas_html}
+"""
     return f"""
 <table border=1>
   <tr><th>Finding / Находка / 发现</th><th>Confidence</th></tr>
   {rows}
 </table>
+{det_html}
 """
+
+@app.post("/predict/det")
+async def predict_det(file: UploadFile):
+    """Detect findings, return JPEG with bounding-box overlay."""
+    raw = await file.read()
+    _, arr, _, _ = _detect_finds(raw)
+    buf = io.BytesIO()
+    Image.fromarray(arr).save(buf, format="JPEG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/jpeg")
 
 @app.post("/predict/cam")
 async def predict_cam(file: UploadFile):
