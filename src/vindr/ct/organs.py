@@ -22,9 +22,16 @@ from __future__ import annotations
 
 import numpy as np
 from scipy import ndimage as ndi
-from scipy.spatial import ConvexHull
-from scipy.spatial.distance import pdist
-from scipy.spatial.qhull import QhullError
+
+from vindr.ct.shapes import (
+    equivalent_diameter_mm,
+    extent_mm,
+    feret_diameter_mm,
+    hydraulic_thickness_mm,
+    perimeter_mm,
+    short_axis_mm,
+    volume_ml,
+)
 
 CONN3 = np.ones((3, 3, 3), bool)  # 26-connectivity: a lumen may drift diagonally
 
@@ -77,90 +84,20 @@ def _keep_major_components(mask3d: np.ndarray, min_frac: float = 0.25) -> tuple[
     return np.isin(lab, keep), int(keep.size)
 
 
-def _bbox_extent_mm(mask3d: np.ndarray, spacing: tuple[float, float, float]) -> tuple[float, float, float]:
-    """Bounding box of a mask in mm, as (z, y, x)."""
-    zz, yy, xx = np.nonzero(mask3d)
-    if zz.size == 0:
-        return (0.0, 0.0, 0.0)
-    sp = [float(s) for s in spacing]
-    return (
-        (zz.max() - zz.min() + 1) * sp[0],
-        (yy.max() - yy.min() + 1) * sp[1],
-        (xx.max() - xx.min() + 1) * sp[2],
-    )
+_bbox_extent_mm = extent_mm
 
 
 def _longest_axis_mm(mask3d: np.ndarray, spacing: tuple[float, float, float]) -> float:
+    """Largest single dimension of a mask, in mm."""
     return float(max(_bbox_extent_mm(mask3d, spacing)))
-
-
-def _perimeter_mm(mask2d: np.ndarray, spacing_yx: tuple[float, float]) -> float:
-    """Perimeter of a 2D mask, by Crofton on a 4-neighbour edge count.
-
-    Counting 4-neighbour mismatches over-states a smooth boundary by 4/pi -- a
-    digital disk of radius r counts about 8r edges against a true 2*pi*r, so
-    27% too much. The Crofton factor pi/4 removes that staircase bias, which
-    matters because 2A/P is read as a cortex thickness: without it a 12 mm
-    cortex came out at 9.5 mm. What is left is plain discretization, a few
-    percent and shrinking as the object grows. No marching-squares dependency,
-    and it never divides by zero.
-    """
-    mask = mask2d.astype(bool)
-    if not mask.any():
-        return 0.0
-    pad = np.pad(mask, 1)
-    edges = int(np.count_nonzero(pad[1:-1, 1:-1] != pad[:-2, 1:-1]))
-    edges += int(np.count_nonzero(pad[1:-1, 1:-1] != pad[1:-1, :-2]))
-    return float(edges * np.pi / 4.0) * float(spacing_yx[0])
-
-
-def feret_diameter_mm(mask2d: np.ndarray, spacing_yx: tuple[float, float]) -> float:
-    """Longest chord through a 2D mask — the diameter a surgeon reads off."""
-    mask = mask2d.astype(bool)
-    if not mask.any():
-        return 0.0
-    # the hull of the boundary is the hull of the mask, and taking the boundary
-    # only first keeps the hull small. Eroding to the core would shrink every
-    # chord by a voxel, which is 2 mm on a 2 mm grid -- visible against the
-    # 30/40 mm aneurysm thresholds.
-    boundary = mask & ~ndi.binary_erosion(mask, np.ones((3, 3), bool))
-    if not boundary.any():
-        boundary = mask
-    yy, xx = np.nonzero(boundary)
-    pts = np.stack([yy * float(spacing_yx[0]), xx * float(spacing_yx[1])], axis=1)
-    if len(pts) < 2:
-        return 0.0
-    # pdist over the hull's vertices, not over every boundary pixel: a 512x512
-    # mask has thousands of boundary pixels but a few hundred hull vertices
-    try:
-        hull = pts[ConvexHull(pts).vertices]
-    except QhullError:  # degenerate input: collinear or fewer than 3 points
-        hull = pts
-    return float(pdist(hull).max())
-
-
-def equivalent_diameter_mm(area_mm2: float) -> float:
-    """Diameter of the circle with the same area."""
-    return float(2.0 * np.sqrt(max(area_mm2, 0.0) / np.pi))
-
-
-def volume_ml(mask3d: np.ndarray, spacing: tuple[float, float, float]) -> float:
-    return float(np.asarray(mask3d).sum()) * float(np.prod([float(s) for s in spacing])) / 1000.0
-
-
-def short_axis_mm(mask3d: np.ndarray, spacing: tuple[float, float, float]) -> float:
-    """Short-axis diameter, measured in the axial plane.
-
-    The standard reads the node's largest diameter in the plane, so the two
-    in-plane extents are reported and the smaller one is the short axis.
-    """
-    _, dy, dx = _bbox_extent_mm(mask3d, spacing)
-    return float(min(dy, dx))
 
 
 # --------------------------------------------------------------------------- #
 # anchors: find a structure from HU alone
 # --------------------------------------------------------------------------- #
+
+
+_perimeter_mm = perimeter_mm
 
 
 def body_mask(volume: np.ndarray, hu_min: float = -300.0) -> np.ndarray:
@@ -491,18 +428,8 @@ def adrenal_findings(
 
 
 def _cortex_thickness_mm(mask2d: np.ndarray, spacing_yx: tuple[float, float]) -> float:
-    """Cortex thickness as twice the hydraulic radius, 2A/P.
-
-    A rim of thickness t has area ~ P*t/2, so 2A/P lands on t. It is an
-    estimate, not a measurement, and it is only meaningful where the mask is a
-    filled kidney rather than a cortex-only segmentation.
-    """
-    mask = mask2d.astype(bool)
-    area = float(mask.sum()) * float(spacing_yx[0]) * float(spacing_yx[1])
-    per = _perimeter_mm(mask, spacing_yx)
-    if per <= 0.0:
-        return 0.0
-    return 2.0 * area / per
+    """Cortex thickness, the 2A/P estimate; see :func:`shapes.hydraulic_thickness_mm`."""
+    return hydraulic_thickness_mm(mask2d, spacing_yx)
 
 
 def kidney_findings(

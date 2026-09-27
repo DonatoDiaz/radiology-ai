@@ -80,6 +80,23 @@ from vindr.ct.segmentation import (
     iou_score,
     seg_loss,
 )
+from vindr.ct.shapes import (
+    equivalent_diameter_mm,
+    extent_mm,
+    feret_diameter_mm,
+    hydraulic_thickness_mm,
+    perimeter_mm,
+    short_axis_mm,
+    volume_ml,
+)
+from vindr.ct.sinuses import (
+    cavity_measurements,
+    find_cavities,
+    fluid_level,
+    mucosal_thickness,
+    sinus_findings,
+    sinus_report,
+)
 from vindr.ct.volume import (
     HU_ACUTE_BLOOD,
     HU_BLOOD,
@@ -117,6 +134,12 @@ __all__ = [  # noqa: RUF022  # grouped by module, not alphabetical, for readabil
     # Phase 4 organs
     "adrenal_findings", "aorta_findings", "aorta_mask", "kidney_findings",
     "lymph_node_findings", "mediastinal_mass_findings", "organ_report",
+    # Phase 5 sinuses
+    "cavity_measurements", "find_cavities", "fluid_level", "mucosal_thickness",
+    "sinus_findings", "sinus_report",
+    # shared shape measurements
+    "equivalent_diameter_mm", "extent_mm", "feret_diameter_mm",
+    "hydraulic_thickness_mm", "perimeter_mm", "short_axis_mm", "volume_ml",
     # pseudo (weakly-supervised masks from slice-level labels)
     "cam_sharpness", "cam_to_seed", "mask_to_volume", "pseudo_mask_study",
     "restrict_to_blood_density", "write_pseudo_dataset",

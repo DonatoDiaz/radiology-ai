@@ -4,6 +4,7 @@
     python -m vindr.ct.predict --input study --ckpt seg_best.pt --seg-ckpt seg_best.pt --measure
     python -m vindr.ct.predict --input study --ckpt best.pt --measure   # adds fracture screening
     python -m vindr.ct.predict --input study --abdominal               # adds the Phase 4 organ block
+    python -m vindr.ct.predict --input study --sinuses                  # adds the Phase 5 sinus block
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from vindr.ct.model import HEMORRHAGE_TYPES, NUM_OUTPUTS, build_head_ct_model, s
 from vindr.ct.organs import organ_report
 from vindr.ct.pseudo import _resize_mask_to
 from vindr.ct.segmentation import build_seg_model
+from vindr.ct.sinuses import sinus_report
 from vindr.ct.volume import (
     CTSeries,
     apply_window,
@@ -196,6 +198,18 @@ def main() -> None:
         action="store_true",
         help="add the Phase 4 organ block: aortic caliber and intimal flap, needs contrast",
     )
+    ap.add_argument(
+        "--sinuses",
+        action="store_true",
+        help="add the Phase 5 sinus block: mucosal thickening, fluid levels, wall defects",
+    )
+    ap.add_argument(
+        "--sinus-reference-ml",
+        type=float,
+        default=None,
+        help="normal cavity volume in mL to judge a mucocele against; "
+        "without it the other cavities on this study are used",
+    )
     ap.add_argument("--out", type=Path, default=None, help="write JSON here (default: stdout)")
     ap.add_argument("--device", default=None, help="cuda | cpu (default: auto)")
     args = ap.parse_args()
@@ -239,6 +253,15 @@ def main() -> None:
         result["organs"] = organ_report(series.volume, series.spacing)
         if result["organs"].get("aorta", {}).get("flags"):
             log.info("organs: %s", "; ".join(result["organs"]["aorta"]["flags"]))
+
+    if args.sinuses:
+        # Phase 5: cavities located from HU; names are not assigned, the loader
+        # keeps no orientation
+        result["sinuses"] = sinus_report(
+            series.volume, series.spacing, reference_volume_ml=args.sinus_reference_ml
+        )
+        if result["sinuses"].get("abnormal"):
+            log.info("sinuses: %s", ", ".join(result["sinuses"]["abnormal"]))
 
     if args.measure or args.seg_ckpt:
         # midline shift / Evans on the native grid, volumes on the mask's grid

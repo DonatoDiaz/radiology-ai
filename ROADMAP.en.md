@@ -125,10 +125,26 @@ task:
 - **done:** adenoma AUC-per-lesion ≥ 0.85; kidney segmentation dice ≥ 0.85 (unvalidated — blocked
   on data).
 
-### Phase 5 — Paranasal sinus CT ⬜ open
-- **Tasks:** sinusitis (mucosal thickening, fluid level), polypoid sinusitis, mucocele (dilated sinus with bone remodeling), fungal ball/mycetoma (hyperostosis/destruction), malignancy (ill-defined borders).
+### Phase 5 — Paranasal sinus CT 🟡 code done, unvalidated
+- **Tasks:** sinusitis (mucosal thickening, fluid level), polypoid sinusitis, mucocele (dilated
+  sinus with bone remodeling), fungal ball/mycetoma (hyperostosis/destruction), malignancy
+  (ill-defined borders).
 - **Data:** collect open "sinus CT" datasets or a de-identified extension.
-- **done:** binary sinusitis AUROC ≥ 0.90; mucocele/topology segmentation dice ≥ 0.7.
+- **Code:** `src/vindr/ct/sinuses.py` locates bone-enclosed cavities from HU — two passes, since a
+  fully opacified sinus contains no air — and measures each one: contents by HU band, mucosal
+  thickness as 2x the distance transform, a fluid level as a *straight* chord across the cavity
+  (a thickened lining is curved and short, so it fails both the 2 mm flatness and the 60% span
+  test), wall bone density against the rest of the skull, and soft tissue growing out through a
+  break in the wall. `predict.py --sinuses` writes the block; 42 tests on synthetic phantoms.
+- **Two limits worth naming:** the loader stores no orientation, so no sinus is ever *named* —
+  only located and measured — and the locator also finds mastoid air cells and sometimes orbits,
+  so every cavity carries the fraction of its wall that is bone. A mucocele needs a normal cavity
+  to compare against: `--sinus-reference-ml` supplies one, otherwise the other cavities on the
+  same study are used, and with a single cavity the criterion stays off.
+- **Still open:** no sinus CT data, so the `done` criteria stand untested — binary sinusitis
+  AUROC ≥ 0.90 and mucocele/topology dice ≥ 0.7 need real labels.
+- **done:** binary sinusitis AUROC ≥ 0.90; mucocele/topology segmentation dice ≥ 0.7 (unvalidated
+  — blocked on data).
 
 ### Phase 6 — Skeletal X-ray / fractures ⬜ open
 - **Tasks:** clavicle, rib, long-bone/wrist fractures; box detection.

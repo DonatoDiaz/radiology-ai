@@ -102,3 +102,78 @@ def test_load_model_rebuilds_weights(tmp_path):
     model2, blob2 = load_model(ckpt, torch.device("cpu"))
     b = predict_series(model2, series, blob2, torch.device("cpu"))
     assert a["probabilities"] == b["probabilities"]
+
+
+def make_sinus_study(tmp_path: Path) -> Path:
+    """A head with one bone-walled air cavity, so the Phase 5 block has work."""
+    d = tmp_path / "study_sinus"
+    d.mkdir(parents=True, exist_ok=True)
+    vol = np.full((24, 96, 96), -1000.0, np.float32)
+    zz, yy, xx = np.mgrid[0:24, 0:96, 0:96]
+    head = (yy - 48) ** 2 + (xx - 48) ** 2 <= 38**2
+    vol[head] = 35.0
+    vol[head & ~(((yy - 48) ** 2 + (xx - 48) ** 2) <= 36**2)] = 700.0
+    d2 = (zz - 12) ** 2 * 4.0 + (yy - 48) ** 2 + (xx - 48) ** 2
+    cav = (d2 <= 81) & (np.abs(zz - 12) <= 4)
+    vol[cav] = -1000.0
+    from scipy import ndimage as ndi
+
+    vol[ndi.binary_dilation(cav, np.ones((3, 3, 3), bool), iterations=2) & ~cav] = 700.0
+    np.save(d / "volume.npy", vol)
+    return d
+
+
+def test_cli_sinuses_flag_adds_a_serialisable_block(tmp_path, monkeypatch, capsys):
+    from vindr.ct import predict as predict_mod
+
+    d = make_sinus_study(tmp_path)
+    ckpt = make_ckpt(tmp_path, "study")
+    out = tmp_path / "res.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        # --device cpu: the CLI otherwise takes the GPU, and these tests are
+        # about the Phase 5 block, not about where it runs
+        [
+            "predict", "--input", str(d), "--ckpt", str(ckpt), "--sinuses",
+            "--device", "cpu", "--out", str(out),
+        ],
+    )
+    predict_mod.main()
+    res = json.loads(out.read_text())
+    assert res["sinuses"]["phase"] == 5
+    assert res["sinuses"]["n_cavities"] >= 1
+    assert "не диагноз" in res["sinuses"]["note"]
+    assert json.dumps(res)  # serialisable
+
+
+def test_cli_sinus_reference_volume_is_passed_through(tmp_path, monkeypatch):
+    from vindr.ct import predict as predict_mod
+
+    d = make_sinus_study(tmp_path)
+    ckpt = make_ckpt(tmp_path, "study")
+    out = tmp_path / "res2.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "predict", "--input", str(d), "--ckpt", str(ckpt), "--sinuses",
+            "--sinus-reference-ml", "3.0", "--device", "cpu", "--out", str(out),
+        ],
+    )
+    predict_mod.main()
+    res = json.loads(out.read_text())
+    assert all(c["reference_volume_ml"] == 3.0 for c in res["sinuses"]["cavities"])
+    assert all(c["reference_source"] == "задан извне" for c in res["sinuses"]["cavities"])
+
+
+def test_report_block_is_absent_without_the_flag(tmp_path, monkeypatch):
+    from vindr.ct import predict as predict_mod
+
+    d = make_sinus_study(tmp_path)
+    ckpt = make_ckpt(tmp_path, "study")
+    out = tmp_path / "res3.json"
+    monkeypatch.setattr(
+        "sys.argv",
+        ["predict", "--input", str(d), "--ckpt", str(ckpt), "--device", "cpu", "--out", str(out)],
+    )
+    predict_mod.main()
+    assert "sinuses" not in json.loads(out.read_text())
