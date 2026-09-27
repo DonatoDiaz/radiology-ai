@@ -105,12 +105,25 @@ task:
 - **Training and validation happen at the very end** (see §6): all code first, then one final training + validation run.
 - **done:** binary AUROC ≥ 0.90 (hemorrhage), ≥ 0.85 per subtype; localization dice ≥ 0.7.
 
-### Phase 4 — Kidney/adrenal CT + mediastinum ⬜ open
+### Phase 4 — Kidney/adrenal CT + mediastinum 🟡 code done, unvalidated
 - **Task A (from notes):** adrenal adenoma — attenuation < 10 HU (threshold); washout ≥ 50–60% by 10 min; cyst-like (no contrast uptake). This is "measurement by HU".
 - **Task B:** chronic pyelonephritis (parenchymal thinning, decreased enhancement), nephrosclerosis ("shrunken kidney"), distorted calyces.
 - **Task C:** mediastinum — thymoma (invasion stages), teratoma (inhomogeneous), intrathoracic goiter, cysts (thin-walled round), lymphoma (nodes < 1 cm = normal).
 - **Data:** check KiTS / Kidney-Tumor-Seg (kidneys), find/collect mediastinal sets.
-- **done:** adenoma AUC-per-lesion ≥ 0.85; kidney segmentation dice ≥ 0.85.
+- **Coded (`organs.py`, 55 tests):** HU anchors that find the body outline, lungs, spine and the
+  contrast-filled aorta next to the spine; the aorta is measured by Feret diameter (aneurysm at
+  30 mm, urgent at 40 mm) and an intimal flap is called when the enhanced lumen splits into two
+  parts on two or more consecutive slices. Per-region measurements: adrenal attenuation with
+  absolute (60%) and relative (40%) washout, kidney long axis / cortex thickness / shrinkage /
+  enhancement asymmetry / collecting-system fluid, node short axis against 10 and 15 mm, and
+  mediastinal mass content (cyst vs fat + calcification vs heterogeneity) with vessel encasement.
+  `predict.py --abdominal` writes the block; regions without a mask are reported as skipped.
+- **Still open:** no KiTS or mediastinal data, so the `done` criteria stand untested — adenoma
+  AUC-per-lesion ≥ 0.85 and kidney segmentation dice ≥ 0.85 need real labels. A HU-only aorta
+  locator can also mistake a well-enhanced kidney near the spine; the width guard catches the
+  gross cases only.
+- **done:** adenoma AUC-per-lesion ≥ 0.85; kidney segmentation dice ≥ 0.85 (unvalidated — blocked
+  on data).
 
 ### Phase 5 — Paranasal sinus CT ⬜ open
 - **Tasks:** sinusitis (mucosal thickening, fluid level), polypoid sinusitis, mucocele (dilated sinus with bone remodeling), fungal ball/mycetoma (hyperostosis/destruction), malignancy (ill-defined borders).

@@ -3,6 +3,7 @@
     python -m vindr.ct.predict --input study_dir_or_nifti --ckpt best.pt
     python -m vindr.ct.predict --input study --ckpt seg_best.pt --seg-ckpt seg_best.pt --measure
     python -m vindr.ct.predict --input study --ckpt best.pt --measure   # adds fracture screening
+    python -m vindr.ct.predict --input study --abdominal               # adds the Phase 4 organ block
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from vindr.ct.fracture import associate_with_hematoma, skull_fractures
 from vindr.ct.lesions import summarize_lesions
 from vindr.ct.measure import summarize_study
 from vindr.ct.model import HEMORRHAGE_TYPES, NUM_OUTPUTS, build_head_ct_model, slice_to_study_scores
+from vindr.ct.organs import organ_report
 from vindr.ct.pseudo import _resize_mask_to
 from vindr.ct.segmentation import build_seg_model
 from vindr.ct.volume import (
@@ -189,6 +191,11 @@ def main() -> None:
     ap.add_argument("--seg-threshold", type=float, default=None, help="override the checkpoint mask threshold")
     ap.add_argument("--save-mask", type=Path, default=None, help="write the predicted mask as .npy")
     ap.add_argument("--measure", action="store_true", help="add HU measurements (density, volume, shift)")
+    ap.add_argument(
+        "--abdominal",
+        action="store_true",
+        help="add the Phase 4 organ block: aortic caliber and intimal flap, needs contrast",
+    )
     ap.add_argument("--out", type=Path, default=None, help="write JSON here (default: stdout)")
     ap.add_argument("--device", default=None, help="cuda | cpu (default: auto)")
     args = ap.parse_args()
@@ -226,6 +233,12 @@ def main() -> None:
         if args.save_mask:
             np.save(args.save_mask, mask.astype(np.uint8))
             log.info("wrote mask %s", args.save_mask)
+
+    if args.abdominal:
+        # Phase 4: the aorta is located from HU alone, the rest needs a mask
+        result["organs"] = organ_report(series.volume, series.spacing)
+        if result["organs"].get("aorta", {}).get("flags"):
+            log.info("organs: %s", "; ".join(result["organs"]["aorta"]["flags"]))
 
     if args.measure or args.seg_ckpt:
         # midline shift / Evans on the native grid, volumes on the mask's grid

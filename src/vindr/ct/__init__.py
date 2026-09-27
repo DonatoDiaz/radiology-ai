@@ -7,6 +7,8 @@ Modules:
     measure.py — HU-based measurements: density, volume, midline shift, Evans index
     segmentation.py — 2.5D U-Net for hemorrhage localization (Dice + BCE)
     fracture.py — skull-vault fracture suspicion: a discontinuity in the bone ring
+    organs.py   — Phase 4 organ anchors and measurements: aorta, adrenal, kidney,
+                  mediastinal nodes and masses
     lesions.py  — 3D lesion extraction and morphology semiology from a mask
     pseudo.py  — weakly-supervised masks: CAM -> GrabCut -> HU band (RSNA has no pixel labels)
     train.py   — training loop (final pass, see ROADMAP §6)
@@ -52,6 +54,15 @@ from vindr.ct.model import (
     build_head_ct_model,
     loss_fn,
     slice_to_study_scores,
+)
+from vindr.ct.organs import (
+    adrenal_findings,
+    aorta_findings,
+    aorta_mask,
+    kidney_findings,
+    lymph_node_findings,
+    mediastinal_mass_findings,
+    organ_report,
 )
 from vindr.ct.pseudo import (
     cam_sharpness,
@@ -103,6 +114,9 @@ __all__ = [  # noqa: RUF022  # grouped by module, not alphabetical, for readabil
     "find_components", "find_lesions", "lesion_semiotics", "summarize_lesions",
     # fracture (skull vault)
     "analyze_slice", "associate_with_hematoma", "skull_fractures",
+    # Phase 4 organs
+    "adrenal_findings", "aorta_findings", "aorta_mask", "kidney_findings",
+    "lymph_node_findings", "mediastinal_mass_findings", "organ_report",
     # pseudo (weakly-supervised masks from slice-level labels)
     "cam_sharpness", "cam_to_seed", "mask_to_volume", "pseudo_mask_study",
     "restrict_to_blood_density", "write_pseudo_dataset",
