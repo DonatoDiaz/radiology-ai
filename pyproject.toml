@@ -20,6 +20,8 @@ dependencies = [
     "uvicorn>=0.30",
     "python-multipart>=0.0.9",
     "ultralytics>=8.4.155",
+    "nibabel>=5.4.2",
+    "simpleitk>=2.5.6",
 ]
 
 [project.scripts]
@@ -27,6 +29,8 @@ vindr-train = "vindr.train:main"
 vindr-predict = "vindr.predict:main"
 vindr-prepare = "vindr.prepare:main"
 vindr-eda = "vindr.eda:main"
+vindr-ct-train = "vindr.ct.train:main"
+vindr-ct-predict = "vindr.ct.predict:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -42,6 +46,11 @@ where = ["src"]
 line-length = 100
 target-version = "py311"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+
 [[tool.uv.index]]
 name = "pytorch-cu124"
 url = "https://download.pytorch.org/whl/cu124"
@@ -50,3 +59,8 @@ explicit = true
 [tool.uv.sources]
 torch = [{ index = "pytorch-cu124" }]
 torchvision = [{ index = "pytorch-cu124" }]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

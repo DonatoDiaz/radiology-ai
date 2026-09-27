@@ -1,0 +1,31 @@
+# Phase 3: head CT (brain) hemorrhage classification — 2.5D.
+# Training is deferred to the final pass (ROADMAP §6); this config defines the
+# pipeline so all phases' code is complete first.
+# Run:
+#   uv run python -m vindr.ct.train --config configs/train_head_ct.yaml
+#   uv run python -m vindr.ct.train --config configs/train_head_ct.yaml --smoke
+
+data:
+  root: ./data/head_ct                 # one subfolder per study (DICOM series / NIfTI)
+  labels_csv: ./data/head_ct/study_labels.csv
+  target_shape: [32, 224, 224]         # (slices, height, width) after resampling
+  slices_per_study: 24                 # study-level model: sampled slices per study
+  val_fraction: 0.15
+  num_workers: 2
+
+model:
+  kind: study                          # study (attention-pooled) | slice
+  in_channels: 3                       # 2.5D: slice + 1 neighbour per side
+  width: 32                            # EfficientNet-B0 scale; raise for T4
+
+train:
+  epochs: 12
+  batch_size: 2                        # study-level batches are slice-heavy
+  lr: 3e-4
+  weight_decay: 1.0e-5
+  mixed_precision: true
+
+logging:
+  output_dir: ./runs
+  run_name: head_ct_v1_2p5d
+  save_best_metric: auroc_macro

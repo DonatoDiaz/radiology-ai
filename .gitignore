@@ -11,6 +11,10 @@ runs_det/
 *.pt
 wandb/
 
+# test / lint caches
+.pytest_cache/
+.ruff_cache/
+
 # IDE
 .idea/
 .vscode/

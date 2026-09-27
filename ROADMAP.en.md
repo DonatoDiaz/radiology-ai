@@ -87,11 +87,14 @@ task:
 - **Training and validation happen at the very end** (see §6): all code first, then one final training + validation run.
 - **done:** mAP50 ≥ 0.5; R² ≥ 0.9 for measurements on an annotated subset.
 
-### Phase 3 — Head CT ("Brain" section) ⬜ open
+### Phase 3 — Head CT ("Brain" section) 🟡 code ready
 - **Tasks:** stroke (ischemic/hemorrhagic), hematomas (epidural/subdural/SAH), tumors (meningioma, glioma, metastases), trauma (skull vault fractures), shift signs.
 - **Data:** RSNA ICH, CQ500, Head-CT datasets (HF), BraTS (MRI, for tumors).
 - **Method:** 2.5D (≥3 slices, semi-3D) already feasible on a GTX 1650; 3D→2.5D distillation for stronger nets.
 - **Notes-semiotics:** differentiate hematomas by location (biconvex, confined by sutures = epidural; unconfined = subdural; along sulci = SAH) — encode into the report semiotics.
+- **Code ready:** DICOM / 16-bit PNG / NIfTI loading to HU (`src/vindr/ct/volume.py`), RSNA preparation script (`scripts/prepare_head_ct.py`), slice + attention-pooled study models for the 5 RSNA subtypes plus `any` (`src/vindr/ct/model.py`), 2.5D datasets (`dataset.py`), training loop (`train.py`, `vindr-ct-train`), inference with JSON report (`predict.py`, `vindr-ct-predict`), HU measurements — lesion density/volume, midline shift, Evans index (`measure.py`). 44 tests cover the pipeline.
+- **Not yet coded:** hemorrhage/lesion detection & segmentation (localization dice target), tumor and fracture models, report semiotics rules.
+- **Training and validation happen at the very end** (see §6): all code first, then one final training + validation run.
 - **done:** binary AUROC ≥ 0.90 (hemorrhage), ≥ 0.85 per subtype; localization dice ≥ 0.7.
 
 ### Phase 4 — Kidney/adrenal CT + mediastinum ⬜ open

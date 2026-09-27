@@ -38,7 +38,7 @@ def _load_font(size: int) -> ImageFont.ImageFont:
 
 def detect(model, image_path: str | Path, conf: float = 0.25, iou: float = 0.45):
     """Run detector; return list of dicts {bbox, class_id, name, conf}."""
-    model = model or _detector()
+    model = model or load_default_detector()
     res = model.predict(
         source=str(image_path),
         conf=conf,

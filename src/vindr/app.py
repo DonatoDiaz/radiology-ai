@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import io
+import tempfile
 from pathlib import Path
 
 import albumentations as A
@@ -80,7 +81,7 @@ async def index():
       <option value="ru" selected>Русский</option>
       <option value="zh">中文</option>
     </select>
-    <label><input type=checkbox name=detect> Detection (bounding boxes)</label>
+    <label><input type=checkbox name=detect_enabled> Detection (bounding boxes)</label>
     <button type=submit>Predict</button>
   </form>
 </body>
@@ -92,8 +93,10 @@ def _detect_finds(raw: bytes):
     global _detector
     if _detector is None:
         _detector = load_default_detector()
-    tmp = Path("_det_input.png")
-    tmp.write_bytes(raw)
+    # unique temp file so concurrent requests cannot overwrite each other
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
+        fh.write(raw)
+        tmp = Path(fh.name)
     try:
         finds = detect(_detector, tmp)
         arr = render_overlay(tmp, finds)
