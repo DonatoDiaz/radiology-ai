@@ -146,11 +146,42 @@ task:
 - **done:** binary sinusitis AUROC ≥ 0.90; mucocele/topology segmentation dice ≥ 0.7 (unvalidated
   — blocked on data).
 
-### Phase 6 — Skeletal X-ray / fractures ⬜ open
+### Phase 6 — Skeletal X-ray / fractures 🟡 code done, unvalidated
 - **Tasks:** clavicle, rib, long-bone/wrist fractures; box detection.
 - **Data:** MURA (9,912, shoulder/elbow/wrist), GRAZPEDWRI (pediatric, 10.2k).
-- **Method:** same detection pipeline as Phase 2; bone contrast is favorable.
-- **done:** MURA AUROC ≥ 0.88; box-mAP50 ≥ 0.5.
+- **Method:** same detection pipeline as Phase 2; bone contrast is favorable. 93 tests on synthetic
+  releases.
+- **Study-level screening (`src/vindr/mura.py`, `scripts/prepare_mura.py`, `scripts/train_mura.py`):**
+  one Phase 1 backbone runs over each projection of a study and the views are max-pooled into one
+  study logit, which keeps the pretrained CXR weights and matches how MURA is scored — a study is
+  abnormal if *any* view is.
+- **Two traps that shape the code:** MURA's manifests do **not** carry the label — it lives in the
+  folder name (`study1_positive`), and a folder that says neither is refused rather than assumed
+  normal, since an unlabelled study counted as normal lowers the AUROC silently. And a patient
+  contributes several studies, so the split is per **patient**; a per-study split would put the same
+  arm in train and val and produce a number that means nothing. `patients_in_both_splits()` checks
+  the property and both scripts refuse to run if it is violated.
+- **Padded views carry a mask:** a padded slot is a black image, and after `Normalize(0.5, 0.5)`
+  black is not neutral, so the backbone returns a real logit for it. Masking is what keeps a
+  two-view study from being scored partly on a blank rectangle.
+- **Pediatric boxes (`src/vindr/grazpedwri.py`, `scripts/prepare_grazpedwri.py`):** GRAZPEDWRI ships
+  Pascal VOC XML, not COCO, so Phase 2's `coco2yolo.py` does not apply and the converter is
+  separate; the model side is reused unchanged. Object names are anatomical free text that includes
+  non-findings, so the class list is built from the data and printed rather than assumed — a reviewer
+  sees what the model is being taught before spending GPU hours. Images are symlinked into the
+  `images/<split>` + `labels/<split>` layout with `data.yaml` naming `path:`/`train:`/`val:`,
+  verified against ultralytics' own `img2label_paths`: pointing `train:` at the label directory
+  collects zero images and trains on nothing, silently. Negative radiographs get empty label files
+  so they stay in the training set.
+- **The box-coordinate trap:** the release has shipped both pixel and 0–1 normalized coordinates.
+  Both are four numbers under `<bndbox>`, so the units are inferred from the magnitude — reading
+  normalized data as pixels yields boxes a thousand times too small that still "train". VOC's
+  1-based inclusive frame is also honoured: a whole-image box is `xmax - xmin = W - 1`, not `W`.
+- **Still open:** no MURA or GRAZPEDWRI release locally (MURA may need PhysioNet credentials), so
+  the criteria stand untested. The pipeline is verified only against synthetic releases: two epochs
+  on random-noise images give AUROC ≈ 0.6, which is the correct result for data with no signal in it
+  and a check that nothing is silently broken. The mAP50 run needs a real GRAZPEDWRI release.
+- **done:** MURA AUROC ≥ 0.88; box-mAP50 ≥ 0.5 (unvalidated — blocked on data).
 
 ### Phase 7 — GI (barium / irrigoscopy) 🔬 most ambitious
 - **Tasks:** esophageal achalasia (grades 1–3 by barium retention), esophageal varices (contour deformation), diverticula (Zenker, bifurcation, epiphrenic), Kloiber's cups (acute obstruction), mucosal relief syndromes.
